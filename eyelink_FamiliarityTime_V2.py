@@ -61,6 +61,33 @@ FACE_HEIGHT_DEG = 10.22  # degrees of visual angle
 # These will be converted to pixels based on monitor setup
 DOT_RADIUS = 10  # pixels
 
+# ==============================================================================
+# FUNCTION TO CHECK FOR EXIT KEYS
+# ==============================================================================
+def check_for_exit():
+    """
+    Check whether Shift+E was pressed. If so, close everything and quit
+    the program immediately. Call this once per frame in any loop that
+    polls the keyboard.
+    """
+    keys = event.getKeys(keyList=['e'], modifiers=True)
+    for key, mods in keys:
+        if mods.get('shift'):
+            print("Shift+E pressed - exiting program.")
+            core.quit()
+
+
+def wait_for_keys_or_exit(keyList):
+    """
+    Block until one of the keys in keyList is pressed, just like
+    event.waitKeys(keyList=keyList), but still allow Shift+E to quit the
+    program at any time while waiting.
+    """
+    while True:
+        check_for_exit()
+        keys = event.getKeys(keyList=keyList)
+        if keys:
+            return keys
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -426,6 +453,8 @@ def run_trial_OG(el_tracker, win, trial_num, face_images, is_practice=False):
     response_time = None
 
     while trial_clock.getTime() < FACE_DISPLAY_DURATION:
+        check_for_exit()
+
         # Draw all faces
         for face_stim in face_stims:
             face_stim.draw()
@@ -586,6 +615,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     clk.reset()
     el_tracker.sendMessage("PRE_FACE_FIX_ONSET")
     while clk.getTime() < PRE_FACE_FIX_DURATION:
+        check_for_exit()
         _draw_fix(fix_gray)
         win.flip()
         if event.getKeys(keyList=['escape']):
@@ -597,6 +627,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     face_clk.reset()
     el_tracker.sendMessage("FACE_ONSET")
     while face_clk.getTime() < face_duration_s:
+        check_for_exit()
         face_stim.draw()
         win.flip()
         if event.getKeys(keyList=['escape']):
@@ -610,6 +641,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     post_clk.reset()
     el_tracker.sendMessage("POST_FACE_FIX_ONSET")
     while post_clk.getTime() < POST_FACE_FIX_DURATION:
+        check_for_exit()
         _draw_fix(fix_gray)
         win.flip()
         if event.getKeys(keyList=['escape']):
@@ -625,6 +657,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
 
     reproduced_duration = None
     while reproduced_duration is None:
+        check_for_exit()
         _draw_fix(fix_black)
         win.flip()
         keys = event.getKeys(keyList=[REPRODUCTION_KEY, 'escape'], timeStamped=repro_clk)
@@ -644,6 +677,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     iti_clk.reset()
     el_tracker.sendMessage("ITI_ONSET")
     while iti_clk.getTime() < ITI_DURATION:
+        check_for_exit()
         win.flip()  # blank screen (window background)
     el_tracker.sendMessage("ITI_OFFSET")
 
@@ -685,7 +719,7 @@ def run_practice(el_tracker, win, practice_faces):
                                        height=30, wrapWidth=1000)
         instructions.draw()
         win.flip()
-        event.waitKeys(keyList=['space'])
+        wait_for_keys_or_exit(['space'])
 
         # Build a balanced practice list: every face x every duration, shuffled,
         # then cap at PRACTICE_TOTAL_TRIALS.
@@ -715,7 +749,7 @@ def run_practice(el_tracker, win, practice_faces):
                                        height=30, wrapWidth=1000)
             feedback.draw()
             win.flip()
-            event.waitKeys(keyList=['space'])
+            wait_for_keys_or_exit(['space'])
             return True
         else:
             session_count += 1
@@ -727,7 +761,7 @@ def run_practice(el_tracker, win, practice_faces):
                                            height=30, wrapWidth=1000)
                 feedback.draw()
                 win.flip()
-                event.waitKeys(keyList=['space'])
+                wait_for_keys_or_exit(['space'])
 
     # End-of-practice message
     feedback = visual.TextStim(win,
@@ -736,7 +770,7 @@ def run_practice(el_tracker, win, practice_faces):
                                height=30, wrapWidth=1000)
     feedback.draw()
     win.flip()
-    event.waitKeys(keyList=['space'])
+    wait_for_keys_or_exit(['space'])
     return False
 
 
@@ -841,7 +875,7 @@ def main():
                                    height=30, wrapWidth=1000)
     instructions.draw()
     win.flip()
-    event.waitKeys(keyList=['space'])
+    wait_for_keys_or_exit(['space'])
 
     # ----- Build the experimental trial list -----
     # Cross every face with both durations, then shuffle.  This keeps the
@@ -870,7 +904,8 @@ def main():
             trial_data['session'] = exp_info['Session']
             all_behavioral_data.append(trial_data)
 
-        # Allow escape between trials
+        # Allow Shift+E to fully exit, or escape to stop the experiment
+        check_for_exit()
         if 'escape' in event.getKeys():
             break
 
