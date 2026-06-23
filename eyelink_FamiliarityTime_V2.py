@@ -438,7 +438,16 @@ def run_trial_OG(el_tracker, win, trial_num, face_images, is_practice=False):
     face_stims = []
     for i, (face_img, pos) in enumerate(zip(face_images, positions)):
         if isinstance(face_img, str):
-            stim = visual.ImageStim(win, image=face_img, pos=pos, size=face_size)
+            # Preserve original aspect ratio: fix width to face_size[0] and
+            # scale height proportionally.
+            _tmp = visual.ImageStim(win, image=face_img)
+            _w, _h = _tmp.size
+            if _w > 0 and _h > 0:
+                _aspect = _h / _w
+                _size = (face_size[0], int(face_size[0] * _aspect))
+            else:
+                _size = face_size
+            stim = visual.ImageStim(win, image=face_img, pos=pos, size=_size)
         else:
             stim = face_img
             stim.pos = pos
@@ -611,7 +620,16 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
                 return None
 
     # ----- Build stimuli -----
-    face_size = calculate_face_size()
+    face_width_pix, face_height_pix = calculate_face_size()
+    # Load image temporarily to get its original aspect ratio, then scale
+    # so the width matches the target width while preserving proportions.
+    _tmp_stim = visual.ImageStim(win, image=face_image)
+    img_w, img_h = _tmp_stim.size  # size in pixels as loaded (may be in pix units)
+    if img_w > 0 and img_h > 0:
+        aspect_ratio = img_h / img_w
+        face_size = (face_width_pix, int(face_width_pix * aspect_ratio))
+    else:
+        face_size = (face_width_pix, face_height_pix)
     face_stim = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
 
     fix_gray = _make_fix_cross(win, FIX_COLOR_GRAY)
@@ -738,8 +756,8 @@ def _show_practice_intro(win, practice_faces):
                                color='white', bold=bold, wrapWidth=900,
                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
-    def _footer(label="Press SPACE to continue."):
-        return visual.TextStim(win, text=label, pos=(0, -300), height=22,
+    def _footer(label="Press SPACE to continue.", pos=(0, -300)):
+        return visual.TextStim(win, text=label, pos=pos, height=22,
                                color=(0.7, 0.7, 0.7), wrapWidth=900,
                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
@@ -790,10 +808,20 @@ def _show_practice_intro(win, practice_faces):
          (" on the screen.", False)],
         y=180)
     if practice_faces:
-        face_size = calculate_face_size()
-        demo_face = visual.ImageStim(win, image=practice_faces[0], pos=(0, -100), size=face_size)
+        face_width_pix, face_height_pix = calculate_face_size()
+        _tmp = visual.ImageStim(win, image=practice_faces[0])
+        _w, _h = _tmp.size
+        if _w > 0 and _h > 0:
+            _demo_size = (face_width_pix, int(face_width_pix * (_h / _w)))
+        else:
+            _demo_size = (face_width_pix, face_height_pix)
+        demo_face = visual.ImageStim(win, image=practice_faces[0], pos=(0, -100), size=_demo_size)
         demo_face.draw()
-    _footer().draw()
+        # Place footer 30 px below the bottom edge of the image
+        footer_y = -100 - _demo_size[1] / 2 - 30
+    else:
+        footer_y = -300
+    _footer(pos=(0, footer_y)).draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
 
@@ -955,7 +983,7 @@ def main():
     if os.path.exists(practice_face_folder):
         practice_face_files = [os.path.join(practice_face_folder, f)
                                for f in os.listdir(practice_face_folder)
-                               if f.endswith(('.jpg', '.png', '.bmp'))]
+                               if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
         practice_faces = practice_face_files
     else:
         print(f"Warning: Practice face folder '{practice_face_folder}' not found!")
