@@ -101,6 +101,22 @@ def check_for_exit():
             core.quit()
 
 
+def check_for_skip():
+    """
+    Check whether Shift+S was pressed (debug shortcut to skip to the next
+    phase). Returns True if skip was requested, False otherwise.
+    Only active in DEBUG_MODE.
+    """
+    if not DEBUG_MODE:
+        return False
+    keys = event.getKeys(keyList=['s'], modifiers=True)
+    for key, mods in keys:
+        if mods.get('shift'):
+            print("[DEBUG] Shift+S pressed - skipping current phase.")
+            return True
+    return False
+
+
 def wait_for_keys_or_exit(keyList):
     """
     Block until one of the keys in keyList is pressed, just like
@@ -658,6 +674,9 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     el_tracker.sendMessage("PRE_FACE_FIX_ONSET")
     while clk.getTime() < PRE_FACE_FIX_DURATION:
         check_for_exit()
+        if check_for_skip():
+            el_tracker.stopRecording()
+            return 'SKIP'
         _draw_fix(fix_gray)
         win.flip()
         if event.getKeys(keyList=['escape']):
@@ -670,6 +689,9 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     el_tracker.sendMessage("FACE_ONSET")
     while face_clk.getTime() < face_duration_s:
         check_for_exit()
+        if check_for_skip():
+            el_tracker.stopRecording()
+            return 'SKIP'
         face_stim.draw()
         win.flip()
         if event.getKeys(keyList=['escape']):
@@ -684,6 +706,9 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     el_tracker.sendMessage("POST_FACE_FIX_ONSET")
     while post_clk.getTime() < POST_FACE_FIX_DURATION:
         check_for_exit()
+        if check_for_skip():
+            el_tracker.stopRecording()
+            return 'SKIP'
         _draw_fix(fix_gray)
         win.flip()
         if event.getKeys(keyList=['escape']):
@@ -700,6 +725,9 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     reproduced_duration = None
     while reproduced_duration is None:
         check_for_exit()
+        if check_for_skip():
+            el_tracker.stopRecording()
+            return 'SKIP'
         _draw_fix(fix_repro)
         win.flip()
         keys = event.getKeys(keyList=[REPRODUCTION_KEY, 'escape'], timeStamped=repro_clk)
@@ -853,6 +881,51 @@ def _show_practice_intro(win, practice_faces):
     wait_for_keys_or_exit(['space'])
 
 
+def _show_post_practice_screen(win):
+    """
+    Display the post-practice reminder screen and wait for SPACE.
+    Uses the same Noto Sans font as the tutorial screens.
+    """
+    lines = [
+        visual.TextStim(win,
+                        text="The practice is over.",
+                        pos=(0, 260), height=32, bold=True,
+                        color="white", wrapWidth=900,
+                        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
+        visual.TextStim(win,
+                        text="Reminder:",
+                        pos=(0, 180), height=28, bold=True,
+                        color="white", wrapWidth=900,
+                        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
+        visual.TextStim(win,
+                        text=("Pay attention to how long the face is shown.\n"
+                              "Then, when the large cross appears, press the SPACEBAR\n"
+                              "when you think the same amount of time has passed."),
+                        pos=(0, 80), height=26,
+                        color="white", wrapWidth=900,
+                        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
+        visual.TextStim(win,
+                        text="Only start timing at the large cross — not during the small crosses.",
+                        pos=(0, -60), height=26, bold=True,
+                        color="white", wrapWidth=900,
+                        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
+        visual.TextStim(win,
+                        text="The experiment will start in the next screen. Be ready!",
+                        pos=(0, -150), height=26,
+                        color="white", wrapWidth=900,
+                        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
+        visual.TextStim(win,
+                        text="Press SPACE to begin.",
+                        pos=(0, -310), height=22,
+                        color=(0.7, 0.7, 0.7), wrapWidth=900,
+                        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
+    ]
+    for stim in lines:
+        stim.draw()
+    win.flip()
+    wait_for_keys_or_exit(['space'])
+
+
 def run_practice(el_tracker, win, practice_faces):
     """
     Run practice session(s) for the face familiarity x duration reproduction task.
@@ -889,20 +962,16 @@ def run_practice(el_tracker, win, practice_faces):
                 face_duration_s=dur,
                 is_practice=True,
             )
+            if trial_data == 'SKIP':
+                print("[DEBUG] Skipping remaining practice trials.")
+                break
             if trial_data is not None:
                 completed_count += 1
 
         # In a duration-reproduction task there's no "correct/incorrect" gating,
         # so we just require the participant to have completed the trials.
         if completed_count >= PRACTICE_MIN_CORRECT:
-            feedback = visual.TextStim(win,
-                                       text=f"Practice complete!\n\n"
-                                            f"You completed {completed_count} of {PRACTICE_TOTAL_TRIALS} practice trials.\n\n"
-                                            "Press SPACE to continue to the main experiment.",
-                                       height=30, wrapWidth=1000)
-            feedback.draw()
-            win.flip()
-            wait_for_keys_or_exit(['space'])
+            _show_post_practice_screen(win)
             return True
         else:
             session_count += 1
@@ -916,15 +985,334 @@ def run_practice(el_tracker, win, practice_faces):
                 win.flip()
                 wait_for_keys_or_exit(['space'])
 
-    # End-of-practice message
-    feedback = visual.TextStim(win,
-                               text="Practice session complete.\n\n"
-                                    "Press SPACE to continue to the main experiment.",
-                               height=30, wrapWidth=1000)
-    feedback.draw()
-    win.flip()
-    wait_for_keys_or_exit(['space'])
+    # End-of-practice message (max sessions reached)
+    _show_post_practice_screen(win)
     return False
+
+
+
+def run_ratings(win, face_images, participant_id, session):
+    """
+    Post-experiment rating phase.
+
+    For every face shown in the experiment the participant rates:
+      1. Familiarity  (0 = Completely unfamiliar … 100 = Highly familiar)
+      2. Attractiveness (0 = Very unattractive   … 100 = Very attractive)
+
+    Both sliders must be touched before the participant can advance.
+
+    Returns
+    -------
+    list of dicts  [{face_image, familiarity_rating, attractiveness_rating}, …]
+    """
+    from psychopy.visual import Slider
+
+    rating_data = []
+
+    # ── Screen 1: intro ──────────────────────────────────────────────────────
+    intro_line1 = visual.TextStim(
+        win,
+        text="In the next part, you will be asked to rate the same images\n"
+             "that you have seen previously.",
+        pos=(0, 80), height=28, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    intro_line2 = visual.TextStim(
+        win,
+        text="The rating will be based on how familiar you are with each face\n"
+             "and how appealing they were.",
+        pos=(0, -40), height=28, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    intro_footer = visual.TextStim(
+        win,
+        text="Press SPACE to continue.",
+        pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    intro_line1.draw()
+    intro_line2.draw()
+    intro_footer.draw()
+    win.flip()
+    wait_for_keys_or_exit(["space"])
+
+    # ── Enable mouse for sliders (needed for practice screen too) ────────────
+    win.mouseVisible = True
+    rating_mouse = event.Mouse(win=win)
+
+    # ── Screen 2: instructions + practice sliders ─────────────────────────────
+    _SW = 600   # slider width
+    _SH = 40    # slider height
+    _LH = 22    # label height
+    _LC = (0.7, 0.7, 0.7)  # label colour
+
+    instr_text = visual.TextStim(
+        win,
+        text="Move the slider to the right if the face felt familiar or appealing to you.\n"
+             "Move it to the left if not.",
+        pos=(0, 320), height=26, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    practice_note = visual.TextStim(
+        win,
+        text="Try the sliders below before continuing:",
+        pos=(0, 230), height=24, color=(0.8, 0.8, 0.8), wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    prac_fam_label = visual.TextStim(
+        win, text="How familiar are you with this face?",
+        pos=(0, 170), height=24, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_fam_slider = Slider(
+        win, ticks=(0, 100), labels=None,
+        pos=(0, 120), size=(_SW, _SH), style=["slider"],
+        granularity=1, color="white", fillColor=(0.4, 0.6, 1),
+        borderColor="white", markerColor=(0.4, 0.6, 1), labelColor="white")
+    prac_fam_left  = visual.TextStim(win, text="Completely\nunfamiliar",
+        pos=(-_SW/2 + 100, 135), height=_LH, color=_LC, alignText="left",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_fam_right = visual.TextStim(win, text="Highly\nfamiliar",
+        pos=(_SW/2 - 100, 135), height=_LH, color=_LC, alignText="right",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    prac_att_label = visual.TextStim(
+        win, text="How appealing do you find this face?",
+        pos=(0, 10), height=24, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_att_slider = Slider(
+        win, ticks=(0, 100), labels=None,
+        pos=(0, -40), size=(_SW, _SH), style=["slider"],
+        granularity=1, color="white", fillColor=(0.4, 0.6, 1),
+        borderColor="white", markerColor=(0.4, 0.6, 1), labelColor="white")
+    prac_att_left  = visual.TextStim(win, text="Very\nunattractive",
+        pos=(-_SW/2 + 100, -25), height=_LH, color=_LC, alignText="left",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_att_right = visual.TextStim(win, text="Very\nattractive",
+        pos=(_SW/2 - 100, -25), height=_LH, color=_LC, alignText="right",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    prac_warn = visual.TextStim(
+        win, text="Please move both sliders before continuing.",
+        pos=(0, -190), height=22, color=(1, 0.3, 0.3), wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_footer_waiting = visual.TextStim(
+        win, text="Move both sliders, then press SPACE to begin rating.",
+        pos=(0, -310), height=22, color=_LC, wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_footer_ready = visual.TextStim(
+        win, text="Press SPACE to begin rating.",
+        pos=(0, -310), height=22, color=(0.4, 1, 0.4), wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    prac_show_warn = False
+    while True:
+        check_for_exit()
+        instr_text.draw()
+        practice_note.draw()
+        prac_fam_label.draw()
+        prac_fam_slider.draw()
+        prac_fam_left.draw()
+        prac_fam_right.draw()
+        prac_att_label.draw()
+        prac_att_slider.draw()
+        prac_att_left.draw()
+        prac_att_right.draw()
+
+        prac_fam_done = prac_fam_slider.getRating() is not None
+        prac_att_done = prac_att_slider.getRating() is not None
+
+        if prac_fam_done and prac_att_done:
+            prac_footer_ready.draw()
+            prac_show_warn = False
+        else:
+            prac_footer_waiting.draw()
+            if prac_show_warn:
+                prac_warn.draw()
+
+        win.flip()
+
+        keys = event.getKeys(keyList=["space", "escape"])
+        if "escape" in keys:
+            return rating_data
+        if check_for_skip():
+            break
+        if "space" in keys:
+            if prac_fam_done and prac_att_done:
+                break
+            else:
+                prac_show_warn = True
+
+    # ── Shuffle face order for rating ─────────────────────────────────────────
+    faces_to_rate = list(face_images)
+    random.shuffle(faces_to_rate)
+
+    # ── Per-face rating screens ───────────────────────────────────────────────
+    SLIDER_WIDTH   = 600
+    SLIDER_HEIGHT  = 40
+    LABEL_HEIGHT   = 22
+    LABEL_COLOR    = (0.7, 0.7, 0.7)
+
+    for face_path in faces_to_rate:
+        check_for_exit()
+        if check_for_skip():
+            print("[DEBUG] Skipping remaining rating trials.")
+            break
+
+        # Load face image (preserve aspect ratio)
+        face_width_pix, face_height_pix = calculate_face_size()
+        _tmp = visual.ImageStim(win, image=face_path)
+        _w, _h = _tmp.size
+        if _w > 0 and _h > 0:
+            _size = (face_width_pix, int(face_width_pix * (_h / _w)))
+        else:
+            _size = (face_width_pix, face_height_pix)
+
+        # Cap image height to 180 px so sliders fit below it
+        MAX_IMG_HEIGHT = 180
+        img_w, img_h = _size
+        if img_h > MAX_IMG_HEIGHT:
+            scale = MAX_IMG_HEIGHT / img_h
+            img_w = int(img_w * scale)
+            img_h = MAX_IMG_HEIGHT
+        display_size = (img_w, img_h)
+
+        # Layout (screen height 768 px, centre = 0):
+        #   image top edge  ~  +340
+        #   image centre    ~  +250
+        #   fam label       ~  +120
+        #   fam slider      ~  +70
+        #   fam end-labels  ~  +30
+        #   att label       ~  -60
+        #   att slider      ~  -110
+        #   att end-labels  ~  -150
+        #   warning/footer  ~  -310
+        face_stim = visual.ImageStim(win, image=face_path, pos=(0, 250), size=display_size)
+
+        # ── Familiarity slider ────────────────────────────────────────────────
+        fam_label = visual.TextStim(
+            win, text="How familiar are you with this face?",
+            pos=(0, 120), height=26, color="white", wrapWidth=900,
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+        fam_slider = Slider(
+            win,
+            ticks=(0, 100),
+            labels=None,
+            pos=(0, 70),
+            size=(SLIDER_WIDTH, SLIDER_HEIGHT),
+            style=["slider"],
+            granularity=1,
+            color="white",
+            fillColor=(0.4, 0.6, 1),
+            borderColor="white",
+            markerColor=(0.4, 0.6, 1),
+            labelColor="white",
+        )
+
+        fam_left = visual.TextStim(
+            win, text="Completely\nunfamiliar",
+            pos=(-SLIDER_WIDTH / 2 + 100, 85), height=LABEL_HEIGHT,
+            color=LABEL_COLOR, alignText="left",
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        fam_right = visual.TextStim(
+            win, text="Highly\nfamiliar",
+            pos=(SLIDER_WIDTH / 2 - 100, 85), height=LABEL_HEIGHT,
+            color=LABEL_COLOR, alignText="right",
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+        # ── Attractiveness slider ─────────────────────────────────────────────
+        att_label = visual.TextStim(
+            win, text="How appealing do you find this face?",
+            pos=(0, -60), height=26, color="white", wrapWidth=900,
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+        att_slider = Slider(
+            win,
+            ticks=(0, 100),
+            labels=None,
+            pos=(0, -110),
+            size=(SLIDER_WIDTH, SLIDER_HEIGHT),
+            style=["slider"],
+            granularity=1,
+            color="white",
+            fillColor=(0.4, 0.6, 1),
+            borderColor="white",
+            markerColor=(0.4, 0.6, 1),
+            labelColor="white",
+        )
+
+        att_left = visual.TextStim(
+            win, text="Very\nunattractive",
+            pos=(-SLIDER_WIDTH / 2 + 100, -95), height=LABEL_HEIGHT,
+            color=LABEL_COLOR, alignText="left",
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        att_right = visual.TextStim(
+            win, text="Very\nattractive",
+            pos=(SLIDER_WIDTH / 2 - 100, -95), height=LABEL_HEIGHT,
+            color=LABEL_COLOR, alignText="right",
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+        # Warn text shown when participant tries to advance without rating both
+        warn_stim = visual.TextStim(
+            win,
+            text="Please rate both sliders before continuing.",
+            pos=(0, -300), height=22, color=(1, 0.3, 0.3), wrapWidth=900,
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+        next_footer = visual.TextStim(
+            win, text="Press SPACE to continue.",
+            pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900,
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+        show_warning = False
+
+        print(f"[DEBUG] Starting rating loop for {face_path}")
+        print(f"[DEBUG] fam_slider pos={fam_slider.pos}, size={fam_slider.size}")
+        print(f"[DEBUG] att_slider pos={att_slider.pos}, size={att_slider.size}")
+
+        while True:
+            check_for_exit()
+
+            face_stim.draw()
+            fam_label.draw()
+            fam_slider.draw()
+            fam_left.draw()
+            fam_right.draw()
+            att_label.draw()
+            att_slider.draw()
+            att_left.draw()
+            att_right.draw()
+
+            fam_rated = fam_slider.getRating() is not None
+            att_rated = att_slider.getRating() is not None
+
+            if fam_rated and att_rated:
+                next_footer.draw()
+                show_warning = False
+            elif show_warning:
+                warn_stim.draw()
+
+            win.flip()
+
+            keys = event.getKeys(keyList=["space", "escape"])
+            if "escape" in keys:
+                return rating_data
+            if check_for_skip():
+                break
+            if "space" in keys:
+                if fam_rated and att_rated:
+                    break
+                else:
+                    show_warning = True
+
+        rating_data.append({
+            "participant_id": participant_id,
+            "session": session,
+            "face_image": face_path,
+            "familiarity_rating": int(fam_slider.getRating()),
+            "attractiveness_rating": int(att_slider.getRating()),
+        })
+
+    win.mouseVisible = False
+    return rating_data
 
 
 # ==============================================================================
@@ -1018,28 +1406,20 @@ def main():
     print("Running practice trials...")
     practice_data = run_practice(el_tracker, win, practice_faces)
 
-    # Main experiment instructions
-    instructions = visual.TextStim(win,
-                                   text="Main Experiment\n\n"
-                                        "A face will appear briefly on each trial.\n"
-                                        "When the fixation cross turns BLACK, press 'J' when you feel\n"
-                                        "the same amount of time has elapsed as the face was shown.\n\n"
-                                        "Press SPACE to begin.",
-                                   height=30, wrapWidth=1000)
-    instructions.draw()
-    win.flip()
-    wait_for_keys_or_exit(['space'])
-
     # ----- Build the experimental trial list -----
-    # Cross every face with both durations, then shuffle.  This keeps the
-    # 800 ms and 1600 ms conditions exactly balanced and randomizes the
-    # order across the experiment, as requested.
-    trial_face_list = [(face, dur)
-                       for face in experimental_faces
-                       for dur in FACE_DURATIONS]
+    # Split faces into two equal halves, assign one duration each, then
+    # shuffle the combined list so durations are fully randomised with no
+    # learnable pattern (exactly 50% each duration).
+    faces_shuffled = list(experimental_faces)
+    random.shuffle(faces_shuffled)
+    n_per_dur = N_EXPERIMENTAL_TRIALS // 2
+    half_a = faces_shuffled[:n_per_dur]
+    half_b = faces_shuffled[n_per_dur:n_per_dur * 2]
+    trial_face_list = (
+        [(face, FACE_DURATIONS[0]) for face in half_a] +
+        [(face, FACE_DURATIONS[1]) for face in half_b]
+    )
     random.shuffle(trial_face_list)
-    # Cap to N_EXPERIMENTAL_TRIALS
-    trial_face_list = trial_face_list[:N_EXPERIMENTAL_TRIALS]
 
     # ----- Run experimental trials -----
     for trial_num, (face_img, dur) in enumerate(trial_face_list):
@@ -1051,6 +1431,9 @@ def main():
             is_practice=False,
         )
 
+        if trial_data == 'SKIP':
+            print("[DEBUG] Skipping remaining experiment trials.")
+            break
         if trial_data is not None:
             # Add participant info to each trial
             trial_data['participant_id'] = exp_info['Participant ID']
@@ -1083,6 +1466,32 @@ def main():
             writer.writerows(all_behavioral_data)
 
         print(f"Behavioral data saved to: {behavioral_fname}")
+
+    # ----- Rating phase -----
+    # Collect unique faces shown in the experiment.
+    # If no trials were completed (e.g. debug skip), fall back to the full
+    # experimental face list so ratings still run.
+    rated_faces = list({td['face_image'] for td in all_behavioral_data})
+    if not rated_faces:
+        print("[DEBUG] No behavioral data found - using full experimental_faces list for ratings.")
+        rated_faces = list(experimental_faces)
+    print(f"[DEBUG] Starting ratings for {len(rated_faces)} faces.")
+    rating_results = run_ratings(win, rated_faces,
+                                 exp_info['Participant ID'], exp_info['Session'])
+
+    # Save rating data to a separate CSV
+    if rating_results:
+        ratings_fname = os.path.join(
+            'data',
+            f"{exp_info['Participant ID']}_sess{exp_info['Session']}_{timestamp}_ratings.csv"
+        )
+        with open(ratings_fname, 'w', newline='') as f:
+            writer = csv.DictWriter(
+                f, fieldnames=['participant_id', 'session', 'face_image',
+                               'familiarity_rating', 'attractiveness_rating'])
+            writer.writeheader()
+            writer.writerows(rating_results)
+        print(f"Rating data saved to: {ratings_fname}")
 
     # Transfer EDF file
     local_edf = os.path.join('data', f"{exp_info['Participant ID']}_{exp_info['Session']}.edf")
