@@ -41,7 +41,31 @@ REPRODUCTION_KEY = 'j'  # key participant presses to end reproduction phase
 FIX_SIZE_PIX = 30
 FIX_LINE_WIDTH_PIX = 4
 FIX_COLOR_GRAY = (0.3, 0.3, 0.3)  # light gray (PsychoPy range -1..1)
-FIX_COLOR_BLACK = (-1, -1, -1)  # black
+FIX_COLOR_REPRODUCTION = (1, 1, 1)  # white -- the reproduction-phase cross
+# (was previously (-1,-1,-1)/black, which exactly matched the window
+# background colour and made it invisible during the real experiment)
+FIX_SIZE_REPRODUCTION_PIX = 40  # slightly bigger than the regular FIX_SIZE_PIX
+
+# Practice-instructions-only: a visually bigger cross used to illustrate the
+# "large" reproduction cross described in the tutorial screens.
+PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX = FIX_SIZE_PIX * 2
+PRACTICE_DEMO_LARGE_CROSS_COLOR = (1, 1, 1)  # white, so it's actually visible
+
+# Tutorial text font: explicitly use PsychoPy's own bundled "Noto Sans" font
+# files (regular/bold/italic/bold-italic all included) instead of leaving the
+# font unspecified. With no font specified, PsychoPy/pyglet falls back to
+# whatever the OS considers "default", which often has no real bold weight --
+# so bold=True ends up faking a bold look by smearing the regular glyphs,
+# which looks rough/uneven. Loading these files directly guarantees a real,
+# clean bold face is used everywhere in the tutorial screens.
+_PSYCHOPY_FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(visual.__file__)), 'assets', 'fonts')
+TUTORIAL_FONT_NAME = 'Noto Sans'
+TUTORIAL_FONT_FILES = [
+    os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-Regular.ttf'),
+    os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-Bold.ttf'),
+    os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-Italic.ttf'),
+    os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-BoldItalic.ttf'),
+]
 
 # Validation parameters
 FIXATION_TOLERANCE = 1.0  # degrees of visual angle
@@ -501,18 +525,18 @@ def run_trial_OG(el_tracker, win, trial_num, face_images, is_practice=False):
     return correct
 
 
-def _make_fix_cross(win, color):
+def _make_fix_cross(win, color, size_pix=FIX_SIZE_PIX, line_width_pix=FIX_LINE_WIDTH_PIX):
     """Build a fixation cross (two crossed lines) at screen center."""
     horiz = visual.Line(win,
-                        start=(-FIX_SIZE_PIX / 2, 0),
-                        end=(FIX_SIZE_PIX / 2, 0),
+                        start=(-size_pix / 2, 0),
+                        end=(size_pix / 2, 0),
                         lineColor=color,
-                        lineWidth=FIX_LINE_WIDTH_PIX)
+                        lineWidth=line_width_pix)
     vert = visual.Line(win,
-                       start=(0, -FIX_SIZE_PIX / 2),
-                       end=(0, FIX_SIZE_PIX / 2),
+                       start=(0, -size_pix / 2),
+                       end=(0, size_pix / 2),
                        lineColor=color,
-                       lineWidth=FIX_LINE_WIDTH_PIX)
+                       lineWidth=line_width_pix)
     return [horiz, vert]
 
 
@@ -591,7 +615,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     face_stim = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
 
     fix_gray = _make_fix_cross(win, FIX_COLOR_GRAY)
-    fix_black = _make_fix_cross(win, FIX_COLOR_BLACK)
+    fix_repro = _make_fix_cross(win, FIX_COLOR_REPRODUCTION, size_pix=FIX_SIZE_REPRODUCTION_PIX)
 
     familiarity, face_source = _classify_face(face_image)
 
@@ -648,7 +672,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
             el_tracker.stopRecording()
             return None
 
-    # ===== (d) Black fixation cross — reproduction phase =====
+    # ===== (d) White fixation cross — reproduction phase =====
     # Stays on screen until participant presses REPRODUCTION_KEY ('j').
     event.clearEvents()
     repro_clk = core.Clock()
@@ -658,7 +682,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     reproduced_duration = None
     while reproduced_duration is None:
         check_for_exit()
-        _draw_fix(fix_black)
+        _draw_fix(fix_repro)
         win.flip()
         keys = event.getKeys(keyList=[REPRODUCTION_KEY, 'escape'], timeStamped=repro_clk)
         if keys:
@@ -700,26 +724,127 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s, is_practi
     return trial_data
 
 
+def _show_practice_intro(win, practice_faces):
+    """
+    Show the four-screen tutorial explaining the face familiarity x duration
+    reproduction task. Shown once, before the first practice trial.
+    """
+    fix_small = _make_fix_cross(win, FIX_COLOR_GRAY)
+    fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
+                                      size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX)
+
+    def _line(text, y, height=30, bold=False):
+        return visual.TextStim(win, text=text, pos=(0, y), height=height,
+                               color='white', bold=bold, wrapWidth=900,
+                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    def _footer(label="Press SPACE to continue."):
+        return visual.TextStim(win, text=label, pos=(0, -300), height=22,
+                               color=(0.7, 0.7, 0.7), wrapWidth=900,
+                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    # Segments inside a mixed-bold line must never wrap on their own (the
+    # manual stacking in _mixed_bold_line is what creates line breaks) -- so
+    # give them a wrapWidth far wider than any single segment could need,
+    # instead of PsychoPy's default 500px (which was cutting phrases like
+    # "Your task is to match the duration of this " onto an extra line).
+    _SEGMENT_WRAP_WIDTH = 4000
+
+    def _measure_width_pix(text, height, bold):
+        """Pixel width of a single line of text, measured without drawing it."""
+        probe = visual.TextStim(win, text=text, height=height, bold=bold,
+                                wrapWidth=_SEGMENT_WRAP_WIDTH,
+                                alignText='left', anchorHoriz='left', anchorVert='center',
+                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        return probe.boundingBox[0]
+
+    def _mixed_bold_line(segments, y, height=28):
+        """
+        Draw one line made of several (text, bold) segments, each
+        independently bold or not, laid out left-to-right and centered as a
+        whole around x=0. Only the words marked bold=True render bold; the
+        rest stays regular weight.
+        """
+        widths = [_measure_width_pix(text, height, bold) for text, bold in segments]
+        x = -sum(widths) / 2
+        for (text, bold), w in zip(segments, widths):
+            visual.TextStim(win, text=text, height=height, bold=bold, color='white',
+                            pos=(x, y), wrapWidth=_SEGMENT_WRAP_WIDTH,
+                            alignText='left', anchorHoriz='left', anchorVert='center',
+                            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
+            x += w
+
+    # ----- Screen 1: trial structure overview -----
+    _line("In every trial of the experiment, you will see a small\n"
+          "fixation cross, followed by a face.", y=220).draw()
+    _draw_fix(fix_small)
+    _footer().draw()
+    win.flip()
+    wait_for_keys_or_exit(['space'])
+
+    # ----- Screen 2: face presentation demo -----
+    _line("This is how each face will appear.", y=240).draw()
+    _mixed_bold_line(
+        [("Each face will appear for ", False),
+         ("a specific duration", True),
+         (" on the screen.", False)],
+        y=180)
+    if practice_faces:
+        face_size = calculate_face_size()
+        demo_face = visual.ImageStim(win, image=practice_faces[0], pos=(0, -100), size=face_size)
+        demo_face.draw()
+    _footer().draw()
+    win.flip()
+    wait_for_keys_or_exit(['space'])
+
+    # ----- Screen 3: reproduction phase explanation -----
+    _line("When the face disappears, the small fixation cross will reappear.\n"
+          "After, a large fixation cross will appear.", y=260, height=28).draw()
+    _mixed_bold_line(
+        [("Your task is to match the duration of this ", False),
+         ("large cross", True),
+         (" to the", False)],
+        y=180, height=28)
+    _line("duration of the face you just saw.", y=140, height=28).draw()
+    _mixed_bold_line(
+        [("Press the ", False),
+         ("J key", True),
+         (" when you think the ", False),
+         ("same amount of time", True),
+         (" has passed.", False)],
+        y=60, height=28)
+    _draw_fix(fix_large_demo)
+    _footer().draw()
+    win.flip()
+    wait_for_keys_or_exit(['space'])
+
+    # ----- Screen 4: get ready -----
+    _line("A practice trial will start in the next screen. Be ready!", y=0).draw()
+    _footer("Press SPACE to begin.").draw()
+    win.flip()
+    wait_for_keys_or_exit(['space'])
+
+
 def run_practice(el_tracker, win, practice_faces):
     """
     Run practice session(s) for the face familiarity x duration reproduction task.
     Returns True if participant completes a practice session.
     """
+    # Full 4-screen tutorial, shown once before the first practice trial.
+    _show_practice_intro(win, practice_faces)
+
     session_count = 0
 
     while session_count < MAX_PRACTICE_SESSIONS:
-        # Instructions
-        instructions = visual.TextStim(win,
-                                       text=f"Practice Session {session_count + 1}\n\n"
-                                            "On each trial a face will appear briefly in the center.\n"
-                                            "When the fixation cross turns BLACK, press the 'J' key\n"
-                                            "when you feel the same amount of time has elapsed as\n"
-                                            "the face was on the screen.\n\n"
-                                            "Press SPACE to begin.",
-                                       height=30, wrapWidth=1000)
-        instructions.draw()
-        win.flip()
-        wait_for_keys_or_exit(['space'])
+        if session_count > 0:
+            # Retry: short reminder only (full tutorial already shown above).
+            instructions = visual.TextStim(win,
+                                           text=f"Practice Session {session_count + 1}\n\n"
+                                                "Press SPACE to begin.",
+                                           height=30, wrapWidth=1000)
+            instructions.draw()
+            win.flip()
+            wait_for_keys_or_exit(['space'])
 
         # Build a balanced practice list: every face x every duration, shuffled,
         # then cap at PRACTICE_TOTAL_TRIALS.
