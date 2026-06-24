@@ -48,7 +48,7 @@ FIX_SIZE_REPRODUCTION_PIX = 40  # slightly bigger than the regular FIX_SIZE_PIX
 
 # Practice-instructions-only: a visually bigger cross used to illustrate the
 # "large" reproduction cross described in the tutorial screens.
-PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX = FIX_SIZE_PIX * 2
+PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX = FIX_SIZE_REPRODUCTION_PIX  # matches actual task size
 PRACTICE_DEMO_LARGE_CROSS_COLOR = (1, 1, 1)  # white, so it's actually visible
 
 # Tutorial text font: explicitly use PsychoPy's own bundled "Noto Sans" font
@@ -60,12 +60,58 @@ PRACTICE_DEMO_LARGE_CROSS_COLOR = (1, 1, 1)  # white, so it's actually visible
 # clean bold face is used everywhere in the tutorial screens.
 _PSYCHOPY_FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(visual.__file__)), 'assets', 'fonts')
 TUTORIAL_FONT_NAME = 'Noto Sans'
-TUTORIAL_FONT_FILES = [
+_candidate_font_files = [
     os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-Regular.ttf'),
     os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-Bold.ttf'),
     os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-Italic.ttf'),
     os.path.join(_PSYCHOPY_FONT_DIR, 'NotoSans-BoldItalic.ttf'),
 ]
+TUTORIAL_FONT_FILES = [f for f in _candidate_font_files if os.path.isfile(f)]
+
+# ---------------------------------------------------------------------------
+# Compatibility shim: older PsychoPy versions (< 2021) do not support the
+# 'alignText', 'anchorHoriz', or 'anchorVert' keyword arguments in TextStim.
+# We monkey-patch visual.TextStim so those kwargs are silently translated to
+# the old equivalents ('alignHoriz') or dropped when not supported.
+# ---------------------------------------------------------------------------
+import inspect as _inspect
+_TextStim_orig_init = visual.TextStim.__init__
+_textstim_params = set(_inspect.signature(_TextStim_orig_init).parameters.keys())
+
+def _textstim_compat_init(self, *args, **kwargs):
+    if 'alignText' not in _textstim_params:
+        align_val = kwargs.pop('alignText', None)
+        if align_val is not None and 'alignHoriz' not in kwargs:
+            kwargs['alignHoriz'] = align_val
+    if 'anchorHoriz' not in _textstim_params:
+        kwargs.pop('anchorHoriz', None)
+    if 'anchorVert' not in _textstim_params:
+        kwargs.pop('anchorVert', None)
+    _TextStim_orig_init(self, *args, **kwargs)
+
+visual.TextStim.__init__ = _textstim_compat_init
+
+# ---------------------------------------------------------------------------
+# Compatibility shim for Slider: older PsychoPy versions do not support
+# 'fillColor', 'borderColor', 'markerColor', 'labelColor'. We translate them
+# to the older 'color' argument (best-effort) or drop them silently.
+# ---------------------------------------------------------------------------
+from psychopy.visual import Slider as _Slider_orig
+_Slider_orig_init = _Slider_orig.__init__
+_slider_params = set(_inspect.signature(_Slider_orig_init).parameters.keys())
+
+_SLIDER_NEW_COLOR_ARGS = ('fillColor', 'borderColor', 'markerColor', 'labelColor')
+
+def _slider_compat_init(self, *args, **kwargs):
+    for arg in _SLIDER_NEW_COLOR_ARGS:
+        if arg not in _slider_params:
+            val = kwargs.pop(arg, None)
+            # Use markerColor as fallback for the old single 'color' param
+            if arg == 'markerColor' and val is not None and 'color' not in kwargs:
+                kwargs['color'] = val
+    _Slider_orig_init(self, *args, **kwargs)
+
+_Slider_orig.__init__ = _slider_compat_init
 
 # Validation parameters
 FIXATION_TOLERANCE = 1.0  # degrees of visual angle
@@ -1030,14 +1076,10 @@ def run_ratings(win, face_images, participant_id, session):
     intro_line1 = visual.TextStim(
         win,
         text="In the next part, you will be asked to rate the same images\n"
-             "that you have seen previously.",
-        pos=(0, 80), height=28, color="white", wrapWidth=900,
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    intro_line2 = visual.TextStim(
-        win,
-        text="The rating will be based on how familiar you are with each face\n"
+             "that you have seen previously.\n\n"
+             "The rating will be based on how familiar you are with each face\n"
              "and how appealing they were.",
-        pos=(0, -40), height=28, color="white", wrapWidth=900,
+        pos=(0, 20), height=28, color="white", wrapWidth=900,
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     intro_footer = visual.TextStim(
         win,
@@ -1046,7 +1088,6 @@ def run_ratings(win, face_images, participant_id, session):
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     intro_line1.draw()
-    intro_line2.draw()
     intro_footer.draw()
     win.flip()
     wait_for_keys_or_exit(["space"])
@@ -1084,11 +1125,11 @@ def run_ratings(win, face_images, participant_id, session):
         granularity=1, color="white", fillColor=(0.4, 0.6, 1),
         borderColor="white", markerColor=(0.4, 0.6, 1), labelColor="white")
     prac_fam_left  = visual.TextStim(win, text="Completely\nunfamiliar",
-        pos=(-_SW/2 + 100, 135), height=_LH, color=_LC, alignText="left",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        pos=(-_SW/2 - 110, 120), height=_LH, color=_LC, alignText="right",
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_fam_right = visual.TextStim(win, text="Highly\nfamiliar",
-        pos=(_SW/2 - 100, 135), height=_LH, color=_LC, alignText="right",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        pos=(_SW/2 + 110, 120), height=_LH, color=_LC, alignText="left",
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     prac_att_label = visual.TextStim(
         win, text="How appealing do you find this face?",
@@ -1100,11 +1141,11 @@ def run_ratings(win, face_images, participant_id, session):
         granularity=1, color="white", fillColor=(0.4, 0.6, 1),
         borderColor="white", markerColor=(0.4, 0.6, 1), labelColor="white")
     prac_att_left  = visual.TextStim(win, text="Very\nunattractive",
-        pos=(-_SW/2 + 100, -25), height=_LH, color=_LC, alignText="left",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        pos=(-_SW/2 - 110, -40), height=_LH, color=_LC, alignText="right",
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_att_right = visual.TextStim(win, text="Very\nattractive",
-        pos=(_SW/2 - 100, -25), height=_LH, color=_LC, alignText="right",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        pos=(_SW/2 + 110, -40), height=_LH, color=_LC, alignText="left",
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     prac_warn = visual.TextStim(
         win, text="Please move both sliders before continuing.",
@@ -1180,13 +1221,13 @@ def run_ratings(win, face_images, participant_id, session):
         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
         markerColor=(0.4, 0.6, 1), labelColor="white")
     fam_left = visual.TextStim(win, text="Completely\nunfamiliar",
-        pos=(-SLIDER_WIDTH / 2 + 100, 85), height=LABEL_HEIGHT,
-        color=LABEL_COLOR, alignText="left",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    fam_right = visual.TextStim(win, text="Highly\nfamiliar",
-        pos=(SLIDER_WIDTH / 2 - 100, 85), height=LABEL_HEIGHT,
+        pos=(-SLIDER_WIDTH / 2 - 110, 70), height=LABEL_HEIGHT,
         color=LABEL_COLOR, alignText="right",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    fam_right = visual.TextStim(win, text="Highly\nfamiliar",
+        pos=(SLIDER_WIDTH / 2 + 110, 70), height=LABEL_HEIGHT,
+        color=LABEL_COLOR, alignText="left",
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     att_label = visual.TextStim(
         win, text="How appealing do you find this face?",
@@ -1197,13 +1238,13 @@ def run_ratings(win, face_images, participant_id, session):
         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
         markerColor=(0.4, 0.6, 1), labelColor="white")
     att_left = visual.TextStim(win, text="Very\nunattractive",
-        pos=(-SLIDER_WIDTH / 2 + 100, -95), height=LABEL_HEIGHT,
-        color=LABEL_COLOR, alignText="left",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    att_right = visual.TextStim(win, text="Very\nattractive",
-        pos=(SLIDER_WIDTH / 2 - 100, -95), height=LABEL_HEIGHT,
+        pos=(-SLIDER_WIDTH / 2 - 110, -110), height=LABEL_HEIGHT,
         color=LABEL_COLOR, alignText="right",
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    att_right = visual.TextStim(win, text="Very\nattractive",
+        pos=(SLIDER_WIDTH / 2 + 110, -110), height=LABEL_HEIGHT,
+        color=LABEL_COLOR, alignText="left",
+        wrapWidth=100, font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     warn_stim = visual.TextStim(win,
         text="Please rate both sliders before continuing.",
@@ -1309,7 +1350,7 @@ def run_post_task_questions(win, participant_id, session):
 
     Returns dict of all answers.
     """
-    from psychopy.visual import Slider, TextBox2
+    from psychopy.visual import Slider
     import string
 
     SW = 550   # slider width
@@ -1350,7 +1391,7 @@ def run_post_task_questions(win, participant_id, session):
 
     def footer(ready, y=-355):
         _footer_stim.text  = "Press ENTER to continue." if ready else "Answer all questions, then press ENTER."
-        _footer_stim.color = (0.4, 1, 0.4) if ready else LC
+        _footer_stim.setColor((0.4, 1, 0.4) if ready else LC, 'rgb')
         _footer_stim.pos   = (0, y)
         return _footer_stim
 
@@ -1361,30 +1402,40 @@ def run_post_task_questions(win, participant_id, session):
                       borderColor='white', markerColor=(0.4, 0.6, 1))
 
     def make_mc(options, y_top, spacing=38):
-        """Return list of (rect, label, value) tuples."""
+        """Return list of (rect, label, checkmark, value) tuples."""
         items = []
         for i, opt in enumerate(options):
             y = y_top - i * spacing
-            rect = visual.Rect(win, width=20, height=20, pos=(-SW/2, y),
+            rect = visual.Rect(win, width=26, height=26, pos=(-SW/2, y),
                                lineColor='white', fillColor=None)
-            lbl  = visual.TextStim(win, text=opt, pos=(-SW/2 + 18, y),
+            check = visual.TextStim(win, text=u'\u2714', pos=(-SW/2, y),
+                                    height=22, color=(0.4, 0.6, 1), bold=True)
+            lbl  = visual.TextStim(win, text=opt, pos=(-SW/2 + 20, y),
                                    height=22, color='white', alignText='left',
                                    anchorHoriz='left',
                                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-            items.append([rect, lbl, opt, False])  # [rect, label, value, selected]
+            items.append([rect, lbl, check, opt])
         return items
 
     def draw_mc(items, selected_val):
-        for rect, lbl, val, _ in items:
-            rect.fillColor = (0.4, 0.6, 1) if val == selected_val else None
+        for rect, lbl, check, val in items:
+            if val == selected_val:
+                rect.setFillColor((-0.6, -0.6, -0.6), 'rgb')
+            else:
+                rect.setFillColor(None)
             rect.draw()
+            if val == selected_val:
+                check.draw()
             lbl.draw()
 
     def check_mc_click(items, selected_val):
-        if mouse.getPressed()[0]:
-            for rect, lbl, val, _ in items:
-                if mouse.isPressedIn(rect):
-                    return val
+        mx, my = mouse.getPos()
+        for rect, lbl, check, val in items:
+            rx, ry = rect.pos
+            hw = rect.width  / 2
+            hh = rect.height / 2
+            if rx - hw <= mx <= rx + hw and ry - hh <= my <= ry + hh:
+                return val
         return selected_val
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1403,7 +1454,7 @@ def run_post_task_questions(win, participant_id, session):
         pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=860,
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
     safe_flip(win)
-    wait_for_keys_or_exit(["space"])
+    wait_for_keys_or_exit(["return"])
 
     # ─────────────────────────────────────────────────────────────────────────
     # SCREEN 1
@@ -1417,8 +1468,8 @@ def run_post_task_questions(win, participant_id, session):
     instr_q   = q_title("Did you use any instruments to answer the previous question?\nIf so, please clarify what instrument(s) you used.", y=190)
     impuls_q  = q_title("How impulsive are you in general?", y=60)
     impuls_sl = make_slider(10)
-    impuls_l  = end_label("Not impulsive\nat all", -SW/2 + 100, 10, "left")
-    impuls_r  = end_label("Very\nimpulsive",  SW/2 - 100,  10, "right")
+    impuls_l  = end_label("Not impulsive\nat all", -SW/2 - 110, 10, "right")
+    impuls_r  = end_label("Very\nimpulsive",  SW/2 + 110,  10, "left")
     punct_q   = q_title("Are you usually…", y=-90)
     punct_mc  = make_mc(["Early", "Just on time", "Late"], y_top=-125)
 
@@ -1459,11 +1510,11 @@ def run_post_task_questions(win, participant_id, session):
         prev_mouse1 = curr_mouse1
 
         # highlight active field
-        time_box_rect.lineColor  = (0.4, 0.6, 1) if active1 == 'time'  else 'white'
-        instr_box_rect.lineColor = (0.4, 0.6, 1) if active1 == 'instr' else 'white'
+        time_box_rect.setLineColor((0.4, 0.6, 1) if active1 == 'time'  else 'white', 'rgb')
+        instr_box_rect.setLineColor((0.4, 0.6, 1) if active1 == 'instr' else 'white', 'rgb')
 
         # keyboard
-        space_pressed1 = False
+        enter_pressed1 = False
         keys = event.getKeys(keyList=
             list(string.digits) + list(string.ascii_letters) +
             [',', '.', '-', 'backspace', 'space', 'return', 'escape'])
@@ -1473,7 +1524,7 @@ def run_post_task_questions(win, participant_id, session):
                 win.mouseVisible = False
                 return answers
             elif k == 'return':
-                space_pressed1 = True
+                enter_pressed1 = True
             elif k == 'space':
                 if active1 == 'instr':
                     instr_buf = (instr_buf + ' ')[:200]
@@ -1506,7 +1557,7 @@ def run_post_task_questions(win, participant_id, session):
             warn().draw()
         safe_flip(win)
 
-        if space_pressed1:
+        if enter_pressed1:
             if all_done1:
                 answers['time_estimate_min'] = time_buf
                 answers['instrument_used']   = instr_buf
@@ -1524,18 +1575,18 @@ def run_post_task_questions(win, participant_id, session):
     mouse.clickReset()
     face_rec_q  = q_title("Do you have a problem recognising faces?", y=290)
     face_rec_sl = make_slider(240)
-    face_rec_l  = end_label("Very poor at\nrecognising faces", -SW/2 + 100, 240, "left")
-    face_rec_r  = end_label("Very good at\nrecognising faces",  SW/2 - 100, 240, "right")
+    face_rec_l  = end_label("Very poor at\nrecognising faces", -SW/2 - 110, 240, "right")
+    face_rec_r  = end_label("Very good at\nrecognising faces",  SW/2 + 110, 240, "left")
 
     tired_q  = q_title("How tired are you right now?", y=130)
     tired_sl = make_slider(80)
-    tired_l  = end_label("Not at all\ntired", -SW/2 + 100, 80, "left")
-    tired_r  = end_label("Extremely\ntired",   SW/2 - 100, 80, "right")
+    tired_l  = end_label("Not at all\ntired", -SW/2 - 110, 80, "right")
+    tired_r  = end_label("Extremely\ntired",   SW/2 + 110, 80, "left")
 
     enjoy_q  = q_title("How much did you enjoy this experiment?", y=-80)
     enjoy_sl = make_slider(-130)
-    enjoy_l  = end_label("Not at all", -SW/2 + 100, -130, "left")
-    enjoy_r  = end_label("Very much",   SW/2 - 100, -130, "right")
+    enjoy_l  = end_label("Not at all", -SW/2 - 110, -130, "right")
+    enjoy_r  = end_label("Very much",   SW/2 + 110, -130, "left")
 
     show_warn2 = False
 
@@ -1554,11 +1605,11 @@ def run_post_task_questions(win, participant_id, session):
             warn().draw()
         safe_flip(win)
 
-        keys = event.getKeys(keyList=['space', 'return', 'escape'])
+        keys = event.getKeys(keyList=['return', 'escape'])
         if 'escape' in keys:
             win.mouseVisible = False
             return answers
-        if 'space' in keys or 'return' in keys:
+        if 'return' in keys:
             if all_done2:
                 answers['face_recognition'] = int(face_rec_sl.getRating())
                 answers['tiredness']        = int(tired_sl.getRating())
@@ -1616,13 +1667,13 @@ def run_post_task_questions(win, participant_id, session):
             list(string.digits) + list(string.ascii_letters) +
             ['-', 'backspace', 'space', 'return', 'escape'])
 
-        space_pressed = False
+        enter_pressed = False
         for k in keys3:
             if k == 'escape':
                 win.mouseVisible = False
                 return answers
             elif k == 'return':
-                space_pressed = True
+                enter_pressed = True
             elif k == 'space':
                 if active_field == 'country':
                     country_buf = (country_buf + ' ')[:100]
@@ -1646,8 +1697,8 @@ def run_post_task_questions(win, participant_id, session):
         country_box_t.text = country_buf
 
         # highlight active field
-        age_box_r.lineColor     = (0.4, 0.6, 1) if active_field == 'age'     else 'white'
-        country_box_r.lineColor = (0.4, 0.6, 1) if active_field == 'country' else 'white'
+        age_box_r.setLineColor((0.4, 0.6, 1) if active_field == 'age'     else 'white', 'rgb')
+        country_box_r.setLineColor((0.4, 0.6, 1) if active_field == 'country' else 'white', 'rgb')
 
         # validate age
         age_valid    = False
@@ -1667,6 +1718,7 @@ def run_post_task_questions(win, participant_id, session):
         if age_warn_msg:
             _warn_stim.text = age_warn_msg
             _warn_stim.pos  = (0, 158)
+            _warn_stim.setColor((1, 0.3, 0.3), 'rgb')
             _warn_stim.draw()
             _warn_stim.pos  = (0, -310)  # restore default
         gender_q.draw(); draw_mc(gender_mc, gender_sel)
@@ -1677,7 +1729,7 @@ def run_post_task_questions(win, participant_id, session):
             warn().draw()
         safe_flip(win)
 
-        if space_pressed:
+        if enter_pressed:
             if all_done3:
                 answers['age']     = str(int(age_buf))
                 answers['gender']  = gender_sel
