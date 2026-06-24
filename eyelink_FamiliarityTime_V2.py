@@ -90,14 +90,14 @@ DOT_RADIUS = 10  # pixels
 # ==============================================================================
 def check_for_exit():
     """
-    Check whether Shift+E was pressed. If so, close everything and quit
-    the program immediately. Call this once per frame in any loop that
-    polls the keyboard.
+    Check whether Shift+Q was pressed. If so, close everything and quit.
+    Using Q instead of E so that the letter E is never consumed from the
+    event queue during text entry.
     """
-    keys = event.getKeys(keyList=['e'], modifiers=True)
+    keys = event.getKeys(keyList=['q'], modifiers=True)
     for key, mods in keys:
         if mods.get('shift'):
-            print("Shift+E pressed - exiting program.")
+            print("Shift+Q pressed - exiting program.")
             core.quit()
 
 
@@ -117,15 +117,32 @@ def check_for_skip():
     return False
 
 
+def safe_flip(win):
+    """
+    win.flip() with retry logic for Mac/pyglet Cocoa AttributeError.
+    On Mac, stale Cocoa event objects can crash dispatch_events(); draining
+    the event queue and retrying usually clears the problem.
+    """
+    from psychopy import core, event as _ev
+    for _ in range(3):
+        try:
+            win.flip()
+            return
+        except AttributeError:
+            _ev.clearEvents()
+            core.wait(0.05)
+    win.flip()  # final attempt — let it raise if still broken
+
+
 def wait_for_keys_or_exit(keyList):
     """
-    Block until one of the keys in keyList is pressed, just like
-    event.waitKeys(keyList=keyList), but still allow Shift+E to quit the
-    program at any time while waiting.
+    Block until one of the keys in keyList is pressed.
+    'space' is replaced by 'return' so only Enter advances screens.
     """
+    extended = list(set('return' if k == 'space' else k for k in keyList))
     while True:
         check_for_exit()
-        keys = event.getKeys(keyList=keyList)
+        keys = event.getKeys(keyList=extended)
         if keys:
             return keys
 
@@ -784,7 +801,7 @@ def _show_practice_intro(win, practice_faces):
                                color='white', bold=bold, wrapWidth=900,
                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
-    def _footer(label="Press SPACE to continue.", pos=(0, -300)):
+    def _footer(label="Press ENTER to continue.", pos=(0, -300)):
         return visual.TextStim(win, text=label, pos=pos, height=22,
                                color=(0.7, 0.7, 0.7), wrapWidth=900,
                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
@@ -876,7 +893,7 @@ def _show_practice_intro(win, practice_faces):
 
     # ----- Screen 4: get ready -----
     _line("A practice trial will start in the next screen. Be ready!", y=0).draw()
-    _footer("Press SPACE to begin.").draw()
+    _footer("Press ENTER to begin.").draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
 
@@ -915,7 +932,7 @@ def _show_post_practice_screen(win):
                         color="white", wrapWidth=900,
                         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
         visual.TextStim(win,
-                        text="Press SPACE to begin.",
+                        text="Press ENTER to begin.",
                         pos=(0, -310), height=22,
                         color=(0.7, 0.7, 0.7), wrapWidth=900,
                         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES),
@@ -941,7 +958,7 @@ def run_practice(el_tracker, win, practice_faces):
             # Retry: short reminder only (full tutorial already shown above).
             instructions = visual.TextStim(win,
                                            text=f"Practice Session {session_count + 1}\n\n"
-                                                "Press SPACE to begin.",
+                                                "Press ENTER to begin.",
                                            height=30, wrapWidth=1000)
             instructions.draw()
             win.flip()
@@ -979,7 +996,7 @@ def run_practice(el_tracker, win, practice_faces):
                 feedback = visual.TextStim(win,
                                            text=f"You completed {completed_count} of {PRACTICE_TOTAL_TRIALS} practice trials.\n\n"
                                                 "Let's try another practice session.\n\n"
-                                                "Press SPACE to continue.",
+                                                "Press ENTER to continue.",
                                            height=30, wrapWidth=1000)
                 feedback.draw()
                 win.flip()
@@ -1024,7 +1041,7 @@ def run_ratings(win, face_images, participant_id, session):
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     intro_footer = visual.TextStim(
         win,
-        text="Press SPACE to continue.",
+        text="Press ENTER to continue.",
         pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900,
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
@@ -1094,11 +1111,11 @@ def run_ratings(win, face_images, participant_id, session):
         pos=(0, -190), height=22, color=(1, 0.3, 0.3), wrapWidth=900,
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_footer_waiting = visual.TextStim(
-        win, text="Move both sliders, then press SPACE to begin rating.",
+        win, text="Move both sliders, then press ENTER to begin rating.",
         pos=(0, -310), height=22, color=_LC, wrapWidth=900,
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_footer_ready = visual.TextStim(
-        win, text="Press SPACE to begin rating.",
+        win, text="Press ENTER to begin rating.",
         pos=(0, -310), height=22, color=(0.4, 1, 0.4), wrapWidth=900,
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
@@ -1129,12 +1146,12 @@ def run_ratings(win, face_images, participant_id, session):
 
         win.flip()
 
-        keys = event.getKeys(keyList=["space", "escape"])
+        keys = event.getKeys(keyList=["return", "escape"])
         if "escape" in keys:
             return rating_data
         if check_for_skip():
             break
-        if "space" in keys:
+        if "return" in keys:
             if prac_fam_done and prac_att_done:
                 break
             else:
@@ -1150,117 +1167,78 @@ def run_ratings(win, face_images, participant_id, session):
     LABEL_HEIGHT   = 22
     LABEL_COLOR    = (0.7, 0.7, 0.7)
 
+    # ── Create rating stims once, reuse for every face ───────────────────────
+    face_width_pix, face_height_pix = calculate_face_size()
+    face_stim = visual.ImageStim(win, image=faces_to_rate[0], pos=(0, 250))
+
+    fam_label = visual.TextStim(
+        win, text="How familiar are you with this face?",
+        pos=(0, 120), height=26, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    fam_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, 70),
+        size=(SLIDER_WIDTH, SLIDER_HEIGHT), style=["slider"], granularity=1,
+        color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
+        markerColor=(0.4, 0.6, 1), labelColor="white")
+    fam_left = visual.TextStim(win, text="Completely\nunfamiliar",
+        pos=(-SLIDER_WIDTH / 2 + 100, 85), height=LABEL_HEIGHT,
+        color=LABEL_COLOR, alignText="left",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    fam_right = visual.TextStim(win, text="Highly\nfamiliar",
+        pos=(SLIDER_WIDTH / 2 - 100, 85), height=LABEL_HEIGHT,
+        color=LABEL_COLOR, alignText="right",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    att_label = visual.TextStim(
+        win, text="How appealing do you find this face?",
+        pos=(0, -60), height=26, color="white", wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    att_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, -110),
+        size=(SLIDER_WIDTH, SLIDER_HEIGHT), style=["slider"], granularity=1,
+        color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
+        markerColor=(0.4, 0.6, 1), labelColor="white")
+    att_left = visual.TextStim(win, text="Very\nunattractive",
+        pos=(-SLIDER_WIDTH / 2 + 100, -95), height=LABEL_HEIGHT,
+        color=LABEL_COLOR, alignText="left",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    att_right = visual.TextStim(win, text="Very\nattractive",
+        pos=(SLIDER_WIDTH / 2 - 100, -95), height=LABEL_HEIGHT,
+        color=LABEL_COLOR, alignText="right",
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    warn_stim = visual.TextStim(win,
+        text="Please rate both sliders before continuing.",
+        pos=(0, -300), height=22, color=(1, 0.3, 0.3), wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    next_footer = visual.TextStim(win, text="Press ENTER to continue.",
+        pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    skip_ratings = False
     for face_path in faces_to_rate:
         check_for_exit()
-        if check_for_skip():
+        if skip_ratings or check_for_skip():
             print("[DEBUG] Skipping remaining rating trials.")
             break
 
-        # Load face image (preserve aspect ratio)
-        face_width_pix, face_height_pix = calculate_face_size()
+        # Update face image and reset sliders for this face
         _tmp = visual.ImageStim(win, image=face_path)
         _w, _h = _tmp.size
+        del _tmp
+        face_width_pix, face_height_pix = calculate_face_size()
         if _w > 0 and _h > 0:
             _size = (face_width_pix, int(face_width_pix * (_h / _w)))
         else:
             _size = (face_width_pix, face_height_pix)
-
-        # Cap image height to 180 px so sliders fit below it
         MAX_IMG_HEIGHT = 180
         img_w, img_h = _size
         if img_h > MAX_IMG_HEIGHT:
             scale = MAX_IMG_HEIGHT / img_h
             img_w = int(img_w * scale)
             img_h = MAX_IMG_HEIGHT
-        display_size = (img_w, img_h)
-
-        # Layout (screen height 768 px, centre = 0):
-        #   image top edge  ~  +340
-        #   image centre    ~  +250
-        #   fam label       ~  +120
-        #   fam slider      ~  +70
-        #   fam end-labels  ~  +30
-        #   att label       ~  -60
-        #   att slider      ~  -110
-        #   att end-labels  ~  -150
-        #   warning/footer  ~  -310
-        face_stim = visual.ImageStim(win, image=face_path, pos=(0, 250), size=display_size)
-
-        # ── Familiarity slider ────────────────────────────────────────────────
-        fam_label = visual.TextStim(
-            win, text="How familiar are you with this face?",
-            pos=(0, 120), height=26, color="white", wrapWidth=900,
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-
-        fam_slider = Slider(
-            win,
-            ticks=(0, 100),
-            labels=None,
-            pos=(0, 70),
-            size=(SLIDER_WIDTH, SLIDER_HEIGHT),
-            style=["slider"],
-            granularity=1,
-            color="white",
-            fillColor=(0.4, 0.6, 1),
-            borderColor="white",
-            markerColor=(0.4, 0.6, 1),
-            labelColor="white",
-        )
-
-        fam_left = visual.TextStim(
-            win, text="Completely\nunfamiliar",
-            pos=(-SLIDER_WIDTH / 2 + 100, 85), height=LABEL_HEIGHT,
-            color=LABEL_COLOR, alignText="left",
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-        fam_right = visual.TextStim(
-            win, text="Highly\nfamiliar",
-            pos=(SLIDER_WIDTH / 2 - 100, 85), height=LABEL_HEIGHT,
-            color=LABEL_COLOR, alignText="right",
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-
-        # ── Attractiveness slider ─────────────────────────────────────────────
-        att_label = visual.TextStim(
-            win, text="How appealing do you find this face?",
-            pos=(0, -60), height=26, color="white", wrapWidth=900,
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-
-        att_slider = Slider(
-            win,
-            ticks=(0, 100),
-            labels=None,
-            pos=(0, -110),
-            size=(SLIDER_WIDTH, SLIDER_HEIGHT),
-            style=["slider"],
-            granularity=1,
-            color="white",
-            fillColor=(0.4, 0.6, 1),
-            borderColor="white",
-            markerColor=(0.4, 0.6, 1),
-            labelColor="white",
-        )
-
-        att_left = visual.TextStim(
-            win, text="Very\nunattractive",
-            pos=(-SLIDER_WIDTH / 2 + 100, -95), height=LABEL_HEIGHT,
-            color=LABEL_COLOR, alignText="left",
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-        att_right = visual.TextStim(
-            win, text="Very\nattractive",
-            pos=(SLIDER_WIDTH / 2 - 100, -95), height=LABEL_HEIGHT,
-            color=LABEL_COLOR, alignText="right",
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-
-        # Warn text shown when participant tries to advance without rating both
-        warn_stim = visual.TextStim(
-            win,
-            text="Please rate both sliders before continuing.",
-            pos=(0, -300), height=22, color=(1, 0.3, 0.3), wrapWidth=900,
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-
-        next_footer = visual.TextStim(
-            win, text="Press SPACE to continue.",
-            pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900,
-            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        face_stim.image = face_path
+        face_stim.size  = (img_w, img_h)
+        fam_slider.reset()
+        att_slider.reset()
 
         show_warning = False
 
@@ -1292,27 +1270,424 @@ def run_ratings(win, face_images, participant_id, session):
 
             win.flip()
 
-            keys = event.getKeys(keyList=["space", "escape"])
+            keys = event.getKeys(keyList=["return", "escape"])
             if "escape" in keys:
                 return rating_data
             if check_for_skip():
+                skip_ratings = True
                 break
-            if "space" in keys:
+            if "return" in keys:
                 if fam_rated and att_rated:
                     break
                 else:
                     show_warning = True
 
-        rating_data.append({
-            "participant_id": participant_id,
-            "session": session,
-            "face_image": face_path,
-            "familiarity_rating": int(fam_slider.getRating()),
-            "attractiveness_rating": int(att_slider.getRating()),
-        })
+        fam_val = fam_slider.getRating()
+        att_val = att_slider.getRating()
+        # Only save if both sliders were rated (skip if Shift+S was used mid-trial)
+        if fam_val is not None and att_val is not None:
+            rating_data.append({
+                "participant_id": participant_id,
+                "session": session,
+                "face_image": face_path,
+                "familiarity_rating": int(fam_val),
+                "attractiveness_rating": int(att_val),
+            })
 
     win.mouseVisible = False
     return rating_data
+
+
+
+def run_post_task_questions(win, participant_id, session):
+    """
+    Post-task questionnaire.
+
+    Screen 1: time estimate, instrument text, impulsivity slider, punctuality MC
+    Screen 2: face recognition slider, tiredness slider, enjoyment slider
+    Screen 3: age, gender, country
+
+    Returns dict of all answers.
+    """
+    from psychopy.visual import Slider, TextBox2
+    import string
+
+    SW = 550   # slider width
+    SH = 38    # slider height
+    LH = 20    # end-label height
+    LC = (0.7, 0.7, 0.7)
+    BG = [-1, -1, -1]
+
+    win.mouseVisible = True
+    mouse = event.Mouse(win=win)
+
+    answers = {}
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+    def q_title(text, y, height=25, bold=False):
+        return visual.TextStim(win, text=text, pos=(0, y), height=height,
+                               bold=bold, color='white', wrapWidth=860,
+                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    def end_label(text, x, y, align):
+        return visual.TextStim(win, text=text, pos=(x, y), height=LH,
+                               color=LC, alignText=align,
+                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    # Shared warn/footer stims — created once and updated in place each frame
+    _warn_stim = visual.TextStim(win,
+        text="Please answer all questions before continuing.",
+        pos=(0, -310), height=20, color=(1, 0.3, 0.3), wrapWidth=860,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    _footer_stim = visual.TextStim(win,
+        text="", pos=(0, -355), height=20, wrapWidth=860,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    def warn(text="Please answer all questions before continuing.", y=-310):
+        _warn_stim.text = text
+        _warn_stim.pos  = (0, y)
+        return _warn_stim
+
+    def footer(ready, y=-355):
+        _footer_stim.text  = "Press ENTER to continue." if ready else "Answer all questions, then press ENTER."
+        _footer_stim.color = (0.4, 1, 0.4) if ready else LC
+        _footer_stim.pos   = (0, y)
+        return _footer_stim
+
+    def make_slider(y):
+        return Slider(win, ticks=(0, 100), labels=None,
+                      pos=(0, y), size=(SW, SH), style=["slider"],
+                      granularity=1, color='white', fillColor=(0.4, 0.6, 1),
+                      borderColor='white', markerColor=(0.4, 0.6, 1))
+
+    def make_mc(options, y_top, spacing=38):
+        """Return list of (rect, label, value) tuples."""
+        items = []
+        for i, opt in enumerate(options):
+            y = y_top - i * spacing
+            rect = visual.Rect(win, width=20, height=20, pos=(-SW/2, y),
+                               lineColor='white', fillColor=None)
+            lbl  = visual.TextStim(win, text=opt, pos=(-SW/2 + 18, y),
+                                   height=22, color='white', alignText='left',
+                                   anchorHoriz='left',
+                                   font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+            items.append([rect, lbl, opt, False])  # [rect, label, value, selected]
+        return items
+
+    def draw_mc(items, selected_val):
+        for rect, lbl, val, _ in items:
+            rect.fillColor = (0.4, 0.6, 1) if val == selected_val else None
+            rect.draw()
+            lbl.draw()
+
+    def check_mc_click(items, selected_val):
+        if mouse.getPressed()[0]:
+            for rect, lbl, val, _ in items:
+                if mouse.isPressedIn(rect):
+                    return val
+        return selected_val
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SCREEN 0: intro
+    # ─────────────────────────────────────────────────────────────────────────
+    visual.TextStim(win,
+        text="Almost done!",
+        pos=(0, 120), height=36, bold=True, color="white", wrapWidth=860,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
+    visual.TextStim(win,
+        text="You will now be asked a short questionnaire.\nPlease answer all questions honestly.",
+        pos=(0, 20), height=28, color="white", wrapWidth=860,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
+    visual.TextStim(win,
+        text="Press ENTER to begin.",
+        pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=860,
+        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
+    safe_flip(win)
+    wait_for_keys_or_exit(["space"])
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SCREEN 1
+    # time estimate (number entry), instrument text, impulsivity slider, MC
+    # ─────────────────────────────────────────────────────────────────────────
+    event.clearEvents()
+    core.wait(0.1)
+    mouse.clickReset()
+    # Number entry — implemented as a simple keyboard buffer
+    time_q    = q_title("Without looking at the time, how long in minutes have these tasks taken you so far?", y=330)
+    instr_q   = q_title("Did you use any instruments to answer the previous question?\nIf so, please clarify what instrument(s) you used.", y=190)
+    impuls_q  = q_title("How impulsive are you in general?", y=60)
+    impuls_sl = make_slider(10)
+    impuls_l  = end_label("Not impulsive\nat all", -SW/2 + 100, 10, "left")
+    impuls_r  = end_label("Very\nimpulsive",  SW/2 - 100,  10, "right")
+    punct_q   = q_title("Are you usually…", y=-90)
+    punct_mc  = make_mc(["Early", "Just on time", "Late"], y_top=-125)
+
+    # Time entry box
+    time_buf = ""
+    time_box_rect = visual.Rect(win, width=160, height=36, pos=(0, 275),
+                                lineColor='white', fillColor=(-0.8, -0.8, -0.8))
+    time_box_txt  = visual.TextStim(win, text="", pos=(0, 275), height=24,
+                                    color='white',
+                                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    # Instrument text entry
+    instr_buf = ""
+    instr_box_rect = visual.Rect(win, width=700, height=36, pos=(0, 130),
+                                 lineColor='white', fillColor=(-0.8, -0.8, -0.8))
+    instr_box_txt  = visual.TextStim(win, text="", pos=(-340, 130), height=22,
+                                     color='white', alignText='left', anchorHoriz='left',
+                                     font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    punct_sel    = None
+    show_warn1   = False
+    prev_mouse1  = False
+    active1      = 'time'  # 'time' or 'instr'
+
+    while True:
+        check_for_exit()
+
+        # mouse: switch active field on click
+        curr_mouse1 = mouse.getPressed()[0]
+        if curr_mouse1 and not prev_mouse1:
+            if mouse.isPressedIn(time_box_rect):
+                active1 = 'time'
+            elif mouse.isPressedIn(instr_box_rect):
+                active1 = 'instr'
+            else:
+                active1 = None  # clicked outside text fields — SPACE will submit
+            punct_sel = check_mc_click(punct_mc, punct_sel)
+        prev_mouse1 = curr_mouse1
+
+        # highlight active field
+        time_box_rect.lineColor  = (0.4, 0.6, 1) if active1 == 'time'  else 'white'
+        instr_box_rect.lineColor = (0.4, 0.6, 1) if active1 == 'instr' else 'white'
+
+        # keyboard
+        space_pressed1 = False
+        keys = event.getKeys(keyList=
+            list(string.digits) + list(string.ascii_letters) +
+            [',', '.', '-', 'backspace', 'space', 'return', 'escape'])
+
+        for k in keys:
+            if k == 'escape':
+                win.mouseVisible = False
+                return answers
+            elif k == 'return':
+                space_pressed1 = True
+            elif k == 'space':
+                if active1 == 'instr':
+                    instr_buf = (instr_buf + ' ')[:200]
+            elif k == 'backspace':
+                if active1 == 'time':
+                    time_buf = time_buf[:-1]
+                else:
+                    instr_buf = instr_buf[:-1]
+            elif k in string.digits:
+                if active1 == 'time':
+                    time_buf = (time_buf + k)[:4]
+                else:
+                    instr_buf = (instr_buf + k)[:200]
+            else:
+                if active1 == 'instr':
+                    instr_buf = (instr_buf + k)[:200]
+
+        time_box_txt.text  = time_buf
+        instr_box_txt.text = instr_buf
+
+        # draw
+        time_q.draw();  time_box_rect.draw();  time_box_txt.draw()
+        instr_q.draw(); instr_box_rect.draw(); instr_box_txt.draw()
+        impuls_q.draw(); impuls_sl.draw(); impuls_l.draw(); impuls_r.draw()
+        punct_q.draw(); draw_mc(punct_mc, punct_sel)
+
+        all_done1 = (time_buf != "" and impuls_sl.getRating() is not None and punct_sel is not None)
+        footer(all_done1).draw()
+        if show_warn1:
+            warn().draw()
+        safe_flip(win)
+
+        if space_pressed1:
+            if all_done1:
+                answers['time_estimate_min'] = time_buf
+                answers['instrument_used']   = instr_buf
+                answers['impulsivity']       = int(impuls_sl.getRating())
+                answers['punctuality']       = punct_sel
+                break
+            else:
+                show_warn1 = True
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SCREEN 2: face recognition, tiredness, enjoyment sliders
+    # ─────────────────────────────────────────────────────────────────────────
+    event.clearEvents()
+    core.wait(0.1)
+    mouse.clickReset()
+    face_rec_q  = q_title("Do you have a problem recognising faces?", y=290)
+    face_rec_sl = make_slider(240)
+    face_rec_l  = end_label("Very poor at\nrecognising faces", -SW/2 + 100, 240, "left")
+    face_rec_r  = end_label("Very good at\nrecognising faces",  SW/2 - 100, 240, "right")
+
+    tired_q  = q_title("How tired are you right now?", y=130)
+    tired_sl = make_slider(80)
+    tired_l  = end_label("Not at all\ntired", -SW/2 + 100, 80, "left")
+    tired_r  = end_label("Extremely\ntired",   SW/2 - 100, 80, "right")
+
+    enjoy_q  = q_title("How much did you enjoy this experiment?", y=-80)
+    enjoy_sl = make_slider(-130)
+    enjoy_l  = end_label("Not at all", -SW/2 + 100, -130, "left")
+    enjoy_r  = end_label("Very much",   SW/2 - 100, -130, "right")
+
+    show_warn2 = False
+
+    while True:
+        check_for_exit()
+
+        face_rec_q.draw(); face_rec_sl.draw(); face_rec_l.draw(); face_rec_r.draw()
+        tired_q.draw();    tired_sl.draw();    tired_l.draw();    tired_r.draw()
+        enjoy_q.draw();    enjoy_sl.draw();    enjoy_l.draw();    enjoy_r.draw()
+
+        all_done2 = (face_rec_sl.getRating() is not None and
+                     tired_sl.getRating()    is not None and
+                     enjoy_sl.getRating()    is not None)
+        footer(all_done2).draw()
+        if show_warn2:
+            warn().draw()
+        safe_flip(win)
+
+        keys = event.getKeys(keyList=['space', 'return', 'escape'])
+        if 'escape' in keys:
+            win.mouseVisible = False
+            return answers
+        if 'space' in keys or 'return' in keys:
+            if all_done2:
+                answers['face_recognition'] = int(face_rec_sl.getRating())
+                answers['tiredness']        = int(tired_sl.getRating())
+                answers['enjoyment']        = int(enjoy_sl.getRating())
+                break
+            else:
+                show_warn2 = True
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SCREEN 3: age (number), gender (MC), country (text)
+    # ─────────────────────────────────────────────────────────────────────────
+    event.clearEvents()
+    core.wait(0.2)
+    safe_flip(win)
+    core.wait(0.1)
+    mouse.clickReset()
+    age_q     = q_title("How old are you?", y=240)
+    age_box_r = visual.Rect(win, width=160, height=36, pos=(0, 190),
+                            lineColor='white', fillColor=(-0.8, -0.8, -0.8))
+    age_box_t = visual.TextStim(win, text="", pos=(0, 190), height=24,
+                                color='white',
+                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    gender_q  = q_title("What is your gender?", y=100)
+    gender_mc = make_mc(["Male", "Female", "Other"], y_top=65)
+
+    country_q     = q_title("What country do you currently live in?", y=-60)
+    country_box_r = visual.Rect(win, width=700, height=36, pos=(0, -110),
+                                lineColor='white', fillColor=(-0.8, -0.8, -0.8))
+    country_box_t = visual.TextStim(win, text="", pos=(-340, -110), height=22,
+                                    color='white', alignText='left', anchorHoriz='left',
+                                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+
+    age_buf     = ""
+    country_buf = ""
+    gender_sel  = None
+    show_warn3  = False
+    prev_mouse3 = False
+    active_field = 'age'  # track which text field is active
+
+    while True:
+        check_for_exit()
+
+        # mouse click to select field
+        curr_mouse3 = mouse.getPressed()[0]
+        if curr_mouse3 and not prev_mouse3:
+            if mouse.isPressedIn(age_box_r):
+                active_field = 'age'
+            elif mouse.isPressedIn(country_box_r):
+                active_field = 'country'
+            gender_sel = check_mc_click(gender_mc, gender_sel)
+        prev_mouse3 = curr_mouse3
+
+        keys3 = event.getKeys(keyList=
+            list(string.digits) + list(string.ascii_letters) +
+            ['-', 'backspace', 'space', 'return', 'escape'])
+
+        space_pressed = False
+        for k in keys3:
+            if k == 'escape':
+                win.mouseVisible = False
+                return answers
+            elif k == 'return':
+                space_pressed = True
+            elif k == 'space':
+                if active_field == 'country':
+                    country_buf = (country_buf + ' ')[:100]
+            elif k == 'backspace':
+                if active_field == 'age':
+                    age_buf = age_buf[:-1]
+                else:
+                    country_buf = country_buf[:-1]
+            elif k in string.digits:
+                if active_field == 'age':
+                    candidate = (age_buf + k)[:3]
+                    if int(candidate) <= 100:
+                        age_buf = candidate
+                else:
+                    country_buf = (country_buf + k)[:100]
+            else:
+                if active_field == 'country':
+                    country_buf = (country_buf + k)[:100]
+
+        age_box_t.text     = age_buf
+        country_box_t.text = country_buf
+
+        # highlight active field
+        age_box_r.lineColor     = (0.4, 0.6, 1) if active_field == 'age'     else 'white'
+        country_box_r.lineColor = (0.4, 0.6, 1) if active_field == 'country' else 'white'
+
+        # validate age
+        age_valid    = False
+        age_warn_msg = ""
+        if age_buf != "":
+            age_int = int(age_buf)
+            if age_int < 18:
+                age_warn_msg = "Age must be 18 or older."
+            elif age_int > 100:
+                age_warn_msg = "Age must be 100 or younger."
+            else:
+                age_valid = True
+
+        all_done3 = (age_valid and gender_sel is not None and country_buf.strip() != "")
+
+        age_q.draw(); age_box_r.draw(); age_box_t.draw()
+        if age_warn_msg:
+            _warn_stim.text = age_warn_msg
+            _warn_stim.pos  = (0, 158)
+            _warn_stim.draw()
+            _warn_stim.pos  = (0, -310)  # restore default
+        gender_q.draw(); draw_mc(gender_mc, gender_sel)
+        country_q.draw(); country_box_r.draw(); country_box_t.draw()
+
+        footer(all_done3).draw()
+        if show_warn3:
+            warn().draw()
+        safe_flip(win)
+
+        if space_pressed:
+            if all_done3:
+                answers['age']     = str(int(age_buf))
+                answers['gender']  = gender_sel
+                answers['country'] = country_buf.strip()
+                break
+            else:
+                show_warn3 = True
+
+    win.mouseVisible = False
+    return answers
 
 
 # ==============================================================================
@@ -1468,6 +1843,7 @@ def main():
         print(f"Behavioral data saved to: {behavioral_fname}")
 
     # ----- Rating phase -----
+    print("[DEBUG] Entering rating phase.")
     # Collect unique faces shown in the experiment.
     # If no trials were completed (e.g. debug skip), fall back to the full
     # experimental face list so ratings still run.
@@ -1492,6 +1868,38 @@ def main():
             writer.writeheader()
             writer.writerows(rating_results)
         print(f"Rating data saved to: {ratings_fname}")
+
+    # ----- Post-task questions -----
+    print("[DEBUG] Entering post-task questions.")
+    # Flush pending window events before entering new screen loop.
+    # On Mac/pyglet, the event queue can contain stale Cocoa objects after
+    # the slider phase that crash win.flip(). We drain it with multiple
+    # flip+wait cycles until it's clean.
+    event.clearEvents()
+    for _ in range(5):
+        try:
+            win.flip()
+        except Exception:
+            pass
+        core.wait(0.1)
+    event.clearEvents()
+    post_answers = run_post_task_questions(win, exp_info['Participant ID'], exp_info['Session'])
+    if post_answers:
+        post_fname = os.path.join(
+            'data',
+            f"{exp_info['Participant ID']}_sess{exp_info['Session']}_{timestamp}_post_task.csv"
+        )
+        post_answers['participant_id'] = exp_info['Participant ID']
+        post_answers['session']        = exp_info['Session']
+        fieldnames_post = ['participant_id', 'session', 'time_estimate_min',
+                           'instrument_used', 'impulsivity', 'punctuality',
+                           'face_recognition', 'tiredness', 'enjoyment',
+                           'age', 'gender', 'country']
+        with open(post_fname, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames_post, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerow(post_answers)
+        print(f"Post-task data saved to: {post_fname}")
 
     # Transfer EDF file
     local_edf = os.path.join('data', f"{exp_info['Participant ID']}_{exp_info['Session']}.edf")
