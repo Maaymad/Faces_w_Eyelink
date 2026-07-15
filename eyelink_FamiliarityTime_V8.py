@@ -5,12 +5,17 @@ Using PsychoPy and PyLink
 Screen: 1920 x 1080 pixels (Propixx), 60 cm viewing distance
 Face stimuli: 16.35° × 10.22° visual angle
 
-V7 changes vs V6:
-  - run_calibration(): cleaned up duplicate doTrackerSetup/openGraphicsEx calls,
-    added CalibrationSounds path, target appearance config, win.winHandle.activate()
-  - drift_correct(): replaced broken manual gaze-sample implementation with the
-    standard pylink.doDriftCorrect() call
-  - allowGUI=True (required for EyeLinkCoreGraphicsPsychoPy to draw into window)
+V8 changes vs V7:
+  - run_calibration(): fixed genv creation to temporarily chdir into
+    CalibrationSounds so EyeLinkCoreGraphicsPsychoPy's internal default
+    sound objects (_target_beep etc.) initialize correctly, then explicitly
+    call setCalibrationSounds() with full paths.
+  - setup_eyelink(): now prints the actual connection error instead of
+    swallowing it.
+  - Added a background emergency-kill watchdog (Ctrl+Alt+Q) that works even
+    while blocked inside pylink calls like doTrackerSetup(), where the
+    normal Shift+Q check_for_exit() cannot run because control has passed
+    to SR Research's own event loop.
 """
 
 import pylink
@@ -18,9 +23,14 @@ import os
 import csv
 import random
 import time
+import threading
 from psychopy import visual, core, event, gui, monitors
 from psychopy.constants import FINISHED, PLAYING, STOPPED
 from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
+
+import EyeLinkCoreGraphicsPsychoPy as _elcg_module
+print(f"[DEBUG] Loading EyeLinkCoreGraphicsPsychoPy from: {_elcg_module.__file__}")
+
 import numpy as np
 
 # ==============================================================================
@@ -75,11 +85,52 @@ def init_propixx_normal_mode():
 
 
 # ==============================================================================
+# EMERGENCY KILL WATCHDOG
+# ==============================================================================
+
+def _emergency_kill_watchdog():
+    """
+    Runs in a background thread and force-kills the whole process on
+    Ctrl+Alt+Q, no matter what the main thread is doing -- including while
+    blocked inside pylink calls like doTrackerSetup(), where normal
+    check_for_exit() cannot run because control has passed to SR Research's
+    own event loop.
+
+    NOTE: This is a hard kill (os._exit) -- it skips normal cleanup
+    (Propixx restore, EyeLink close, window close, in-progress CSV writes).
+    Data from already-completed trials that was already written to disk is
+    safe; use only when the program is genuinely unresponsive.
+
+    Requires: pip install keyboard
+    On Windows, global key hooks generally require running as Administrator.
+    """
+    try:
+        import keyboard
+    except ImportError:
+        print("[WARNING] 'keyboard' module not installed -- emergency kill "
+              "hotkey (Ctrl+Alt+Q) will NOT work. Install with: "
+              "pip install keyboard")
+        return
+
+    def _kill():
+        print("\n[EMERGENCY KILL] Ctrl+Alt+Q pressed - force-terminating process.")
+        os._exit(1)
+
+    try:
+        keyboard.add_hotkey('ctrl+alt+q', _kill)
+        print("[DEBUG] Emergency kill hotkey armed: Ctrl+Alt+Q")
+        keyboard.wait()  # blocks this thread only, listens forever
+    except Exception as e:
+        print(f"[WARNING] Emergency kill hotkey failed to arm: {e}")
+
+
+# ==============================================================================
 # EXPERIMENT PARAMETERS
 # ==============================================================================
 
 # Debug mode - set to True to run without EyeLink connected
 DEBUG_MODE = False
+DEBUG_MODE_SKIP = True
 
 # Windowed mode - independent of DEBUG_MODE.
 # Set WINDOWED_MODE = True to run in a smaller non-fullscreen window
@@ -167,7 +218,6 @@ def _slider_compat_init(self, *args, **kwargs):
                 kwargs['color'] = val
     _Slider_orig_init(self, *args, **kwargs)
 
-
 _Slider_orig.__init__ = _slider_compat_init
 
 # EyeLink / trial params
@@ -190,15 +240,19 @@ DOT_RADIUS      = 10   # pixels (unused in main task, kept for legacy)
 def check_for_exit():
     """Shift+Q quits the experiment immediately."""
     keys = event.getKeys(keyList=['q'], modifiers=True)
+    if keys:
+        print(f"[DEBUG] 'q' detected, raw keys+mods: {keys}")
     for key, mods in keys:
         if mods.get('shift'):
             print("Shift+Q pressed - exiting program.")
             core.quit()
+        else:
+            print(f"[DEBUG] 'q' seen but shift NOT flagged. mods dict = {mods}")
 
 
 def check_for_skip():
     """Shift+S skips the current phase (DEBUG_MODE only)."""
-    if not DEBUG_MODE:
+    if not DEBUG_MODE_SKIP:
         return False
     keys = event.getKeys(keyList=['s'], modifiers=True)
     for key, mods in keys:
@@ -312,8 +366,10 @@ def setup_eyelink(win, edf_fname):
 
     try:
         el_tracker = pylink.EyeLink("100.1.1.1")
-    except RuntimeError:
-        print("Could not connect to EyeLink. Check connection and try again.")
+    except RuntimeError as err:
+        print(f"Could not connect to EyeLink: {err}")
+        print("Check Ethernet cable, Display PC IP (should be 100.1.1.2/24), "
+              "and that the Host PC is at the main tracker screen.")
         core.quit()
 
     try:
@@ -357,19 +413,13 @@ def setup_eyelink(win, edf_fname):
 
 
 # ==============================================================================
-# CALIBRATION  (V7: fixed — single openGraphicsEx + single doTrackerSetup)
+# CALIBRATION  (V8: fixed genv/sound init — chdir into CalibrationSounds while
+#                    constructing genv, then explicitly setCalibrationSounds())
 # ==============================================================================
 
 def run_calibration(el_tracker, win):
     """
     Run EyeLink camera setup / calibration / validation.
-
-    Fixed in V7:
-    - Only ONE call to openGraphicsEx() and ONE call to doTrackerSetup().
-    - CalibrationSounds folder resolved relative to the script location.
-    - Target appearance configured explicitly.
-    - win.winHandle.activate() forces the PsychoPy window to the foreground
-      so EyeLink can draw calibration targets into it.
     """
     if DEBUG_MODE:
         print("[DEBUG] Skipping calibration in debug mode")
@@ -380,7 +430,18 @@ def run_calibration(el_tracker, win):
     _script_dir = os.path.dirname(os.path.abspath(__file__))
     _sounds_dir = os.path.join(_script_dir, 'CalibrationSounds')
 
-    genv = EyeLinkCoreGraphicsPsychoPy(el_tracker, win)
+    # EyeLinkCoreGraphicsPsychoPy's __init__ creates its default sound
+    # objects (_target_beep etc.) by loading 'type.wav' etc. relative to
+    # the CURRENT WORKING DIRECTORY. If those files aren't found there,
+    # the sound objects silently fail to get created, and any later call
+    # to setCalibrationSounds() raises AttributeError. Temporarily chdir
+    # into CalibrationSounds so the default load succeeds.
+    _prev_cwd = os.getcwd()
+    try:
+        os.chdir(_sounds_dir)
+        genv = EyeLinkCoreGraphicsPsychoPy(el_tracker, win)
+    finally:
+        os.chdir(_prev_cwd)
     print(f"[DEBUG] genv created: {genv}")
 
     # openGraphicsEx MUST come before any genv configuration calls —
@@ -395,12 +456,17 @@ def run_calibration(el_tracker, win):
     genv.setTargetType('circle')
     genv.setTargetSize(24)
 
-    # Note: setCalibrationSounds() is intentionally NOT called here.
-    # EyeLinkCoreGraphicsPsychoPy 2024.x initialises its internal sound
-    # objects lazily, so calling setCalibrationSounds() raises AttributeError
-    # even after openGraphicsEx(). The library picks up type.wav / qbeep.wav /
-    # error.wav automatically from the working directory (or its own defaults
-    # if the files are absent), so no explicit call is needed.
+    # Point the library explicitly at the calibration sound files, using
+    # full paths so it doesn't matter what the current working directory is.
+    target_beep = os.path.join(_sounds_dir, 'type.wav')
+    good_beep   = os.path.join(_sounds_dir, 'qbeep.wav')
+    error_beep  = os.path.join(_sounds_dir, 'error.wav')
+    if all(os.path.isfile(p) for p in (target_beep, good_beep, error_beep)):
+        genv.setCalibrationSounds(target_beep, good_beep, error_beep)
+        print(f"[DEBUG] Calibration sounds loaded from {_sounds_dir}")
+    else:
+        print(f"[WARNING] Calibration sound files missing in {_sounds_dir} "
+              f"— calibration may crash without them.")
 
     el_tracker.sendCommand("calibration_type = HV9")
 
@@ -424,10 +490,12 @@ def run_calibration(el_tracker, win):
             pass
 
     try:
+        print("[DEBUG] calling doTrackerSetup...", flush=True)
         el_tracker.doTrackerSetup()
-        print("[DEBUG] doTrackerSetup returned")
-    except RuntimeError as err:
-        print(f"Calibration error: {err}")
+        print("[DEBUG] doTrackerSetup returned", flush=True)
+    except Exception as err:
+        import traceback
+        traceback.print_exc()
         el_tracker.exitCalibration()
 
     return el_tracker
@@ -719,10 +787,16 @@ def _show_practice_intro(win, practice_faces):
         _tmp = visual.ImageStim(win, image=practice_faces[0])
         _w, _h = _tmp.size
         _demo_size = (face_width_pix, int(face_width_pix * (_h / _w))) \
-                     if _w > 0 and _h > 0 else (face_width_pix, face_height_pix)
+            if _w > 0 and _h > 0 else (face_width_pix, face_height_pix)
+        _demo_pos = (0, 0)  # <-- same position as the real trial (run_trial uses pos=(0, 0))
+
+        # Caption directly above the demo image
+        caption_y = _demo_pos[1] + _demo_size[1] / 2 + 40
+        _line("This is how a face will appear:", y=caption_y, height=26).draw()
+
         visual.ImageStim(win, image=practice_faces[0],
-                         pos=(0, -100), size=_demo_size).draw()
-        footer_y = -100 - _demo_size[1] / 2 - 30
+                         pos=_demo_pos, size=_demo_size).draw()
+        footer_y = _demo_pos[1] - _demo_size[1] / 2 - 40
     else:
         footer_y = -300
     _footer(pos=(0, footer_y)).draw()
@@ -1029,7 +1103,7 @@ def run_ratings(win, face_images, participant_id, session):
                 "attractiveness_rating":int(av),
             })
 
-    win.mouseVisible = False
+    #win.mouseVisible = False
     return rating_data
 
 
@@ -1331,6 +1405,11 @@ def run_post_task_questions(win, participant_id, session):
 
 def main():
     verify_display_parameters()
+
+    # Arm the emergency-kill watchdog (Ctrl+Alt+Q) before anything else, so
+    # it's active even if the window/tracker setup itself hangs.
+    # watchdog_thread = threading.Thread(target=_emergency_kill_watchdog, daemon=True)
+    # watchdog_thread.start()
 
     exp_info = {'Participant ID': '', 'Session': '001'}
     dlg = gui.DlgFromDict(dictionary=exp_info, title='Face Familiarity Experiment')
