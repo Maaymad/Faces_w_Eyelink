@@ -897,7 +897,7 @@ def _show_practice_intro(win, practice_faces):
          ("large cross", True), (" to the", False)], y=180, height=28)
     _line("duration of the face you just saw.", y=140, height=28).draw()
     _mixed_bold_line(
-        [("Press the ", False), ("SPACES bar", True),
+        [("Press the ", False), ("SPACE bar", True),
          (" when you think the ", False), ("same amount of time", True),
          (" has passed.", False)], y=60, height=28)
     _draw_fix(fix_large_demo)
@@ -934,7 +934,7 @@ def _show_post_practice_screen(win):
     lines += _multiline_centered("Reminder:", y=180, height=28, bold=True)
     lines += _multiline_centered(
         "Pay attention to how long the face is shown.\n"
-        "Then, when the large cross appears, press the SPACE BAR\n"
+        "Then, when the large cross appears, press the SPACE bar\n"
         "when you think the same amount of time has passed.",
         y=80, height=26)
     lines += _multiline_centered(
