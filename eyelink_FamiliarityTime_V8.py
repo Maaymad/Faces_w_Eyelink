@@ -549,6 +549,69 @@ def drift_correct(el_tracker, win, position=(0, 0), tolerance_deg=1.0):
 
     return True
 
+# ==============================================================================
+# TEXT HELPERS (multi-line centering workaround for PsychoPy 3.2.4)
+# ==============================================================================
+
+def draw_centered_multiline_text(win, text, pos=(0, 0), height=30, bold=False,
+                                  color='white', wrapWidth=900, line_spacing=1.35,
+                                  align='center'):
+    """
+    Workaround for a PsychoPy 3.2.4 bug where alignHoriz='center' does not
+    correctly center individual lines within a manually \\n-separated
+    multi-line TextStim. Splits text on \\n and builds one centered
+    TextStim per line. Returns a list of TextStim objects -- draw each one.
+
+    align: 'center' (default) -> pos[0] is the horizontal CENTER of the block.
+           'left'  -> pos[0] is the LEFT edge of the block (lines are still
+                      internally centered relative to each other -- useful
+                      for labels that sit to the right of a slider).
+           'right' -> pos[0] is the RIGHT edge of the block (useful for
+                      labels that sit to the left of a slider).
+    """
+    sub_lines = text.split('\n')
+    n = len(sub_lines)
+    line_height_px = height * line_spacing
+    top_y = pos[1] + (n - 1) * line_height_px / 2
+
+    if align == 'center':
+        center_x = pos[0]
+    else:
+        widths = []
+        for sub in sub_lines:
+            probe = visual.TextStim(win, text=sub, height=height, bold=bold,
+                                    wrapWidth=4000, alignHoriz='center', alignVert='center',
+                                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+            widths.append(probe.boundingBox[0])
+        block_width = max(widths) if widths else 0
+        center_x = (pos[0] + block_width / 2) if align == 'left' else (pos[0] - block_width / 2)
+
+    stims = []
+    for i, sub in enumerate(sub_lines):
+        stims.append(visual.TextStim(
+            win, text=sub, pos=(center_x, top_y - i * line_height_px), height=height,
+            color=color, bold=bold, wrapWidth=wrapWidth,
+            alignHoriz='center', alignVert='center',
+            font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES))
+    return stims
+
+
+def draw_all_centered_multiline_text(win, text, **kwargs):
+    """Convenience: build + immediately draw all lines of centered text."""
+    for s in draw_centered_multiline_text(win, text, **kwargs):
+        s.draw()
+
+
+def draw_lines(*stim_lists):
+    """Draws TextStim(s) across one or more args. Each arg may be a single
+    TextStim OR a list of TextStim (as returned by draw_centered_multiline_text).
+    Lets you write draw_lines(a, b, c) regardless of which are lists."""
+    for item in stim_lists:
+        if isinstance(item, (list, tuple)):
+            for s in item:
+                s.draw()
+        else:
+            item.draw()
 
 # ==============================================================================
 # FIXATION CROSS HELPERS
@@ -736,14 +799,37 @@ def _show_practice_intro(win, practice_faces):
     fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
                                      size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX)
 
-    def _line(text, y, height=30, bold=False):
-        return visual.TextStim(win, text=text, pos=(0, y), height=height,
-                               color='white', bold=bold, wrapWidth=900,
-                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    class _MultiLineCentered:
+        """Draws each line of a multi-line string as its own centered
+        TextStim, working around a PsychoPy 3.2.4 bug where alignHoriz='center'
+        doesn't properly center individual lines within a manually-broken
+        (\\n-separated) multi-line TextStim."""
+
+        def __init__(self, stims):
+            self._stims = stims
+
+        def draw(self):
+            for s in self._stims:
+                s.draw()
+
+    def _line(text, y, height=30, bold=False, line_spacing=1.35):
+        sub_lines = text.split('\n')
+        n = len(sub_lines)
+        line_height_px = height * line_spacing
+        top_y = y + (n - 1) * line_height_px / 2
+        stims = []
+        for i, sub in enumerate(sub_lines):
+            stims.append(visual.TextStim(
+                win, text=sub, pos=(0, top_y - i * line_height_px), height=height,
+                color='white', bold=bold, wrapWidth=900,
+                alignHoriz='center', alignVert='center',
+                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES))
+        return _MultiLineCentered(stims)
 
     def _footer(label="Press ENTER to continue.", pos=(0, -300)):
         return visual.TextStim(win, text=label, pos=pos, height=22,
                                color=(0.7, 0.7, 0.7), wrapWidth=900,
+                               alignText='center', anchorHoriz='center',
                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     _SEGMENT_WRAP_WIDTH = 4000
@@ -827,37 +913,38 @@ def _show_practice_intro(win, practice_faces):
 
 
 def _show_post_practice_screen(win):
-    lines = [
-        visual.TextStim(win, text="The practice is over.",
-                        pos=(0, 260), height=32, bold=True, color="white",
-                        wrapWidth=900, font=TUTORIAL_FONT_NAME,
-                        fontFiles=TUTORIAL_FONT_FILES),
-        visual.TextStim(win, text="Reminder:",
-                        pos=(0, 180), height=28, bold=True, color="white",
-                        wrapWidth=900, font=TUTORIAL_FONT_NAME,
-                        fontFiles=TUTORIAL_FONT_FILES),
-        visual.TextStim(win,
-                        text=("Pay attention to how long the face is shown.\n"
-                              "Then, when the large cross appears, press the SPACE bar\n"
-                              "when you think the same amount of time has passed."),
-                        pos=(0, 80), height=26, color="white",
-                        wrapWidth=900, font=TUTORIAL_FONT_NAME,
-                        fontFiles=TUTORIAL_FONT_FILES),
-        visual.TextStim(win,
-                        text="Only start timing at the large cross — not during the small crosses.",
-                        pos=(0, -60), height=26, bold=True, color="white",
-                        wrapWidth=900, font=TUTORIAL_FONT_NAME,
-                        fontFiles=TUTORIAL_FONT_FILES),
-        visual.TextStim(win,
-                        text="The experiment will start in the next screen. Be ready!",
-                        pos=(0, -150), height=26, color="white",
-                        wrapWidth=900, font=TUTORIAL_FONT_NAME,
-                        fontFiles=TUTORIAL_FONT_FILES),
-        visual.TextStim(win, text="Press ENTER to begin.",
-                        pos=(0, -310), height=22, color=(0.7, 0.7, 0.7),
-                        wrapWidth=900, font=TUTORIAL_FONT_NAME,
-                        fontFiles=TUTORIAL_FONT_FILES),
-    ]
+    def _multiline_centered(text, y, height=26, bold=False, line_spacing=1.35):
+        """Same fix as _line(): splits on \\n into separate centered TextStims,
+        working around the PsychoPy 3.2.4 multi-line centering bug."""
+        sub_lines = text.split('\n')
+        n = len(sub_lines)
+        line_height_px = height * line_spacing
+        top_y = y + (n - 1) * line_height_px / 2
+        stims = []
+        for i, sub in enumerate(sub_lines):
+            stims.append(visual.TextStim(
+                win, text=sub, pos=(0, top_y - i * line_height_px), height=height,
+                color='white', bold=bold, wrapWidth=900,
+                alignHoriz='center', alignVert='center',
+                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES))
+        return stims
+
+    lines = []
+    lines += _multiline_centered("The practice is over.", y=260, height=32, bold=True)
+    lines += _multiline_centered("Reminder:", y=180, height=28, bold=True)
+    lines += _multiline_centered(
+        "Pay attention to how long the face is shown.\n"
+        "Then, when the large cross appears, press the SPACE BAR\n"
+        "when you think the same amount of time has passed.",
+        y=80, height=26)
+    lines += _multiline_centered(
+        "Only start timing at the large cross — not during the small crosses.",
+        y=-60, height=26, bold=True)
+    lines += _multiline_centered(
+        "The experiment will start in the next screen. Be ready!",
+        y=-150, height=26)
+    lines += _multiline_centered("Press ENTER to begin.", y=-310, height=22)
+
     for stim in lines:
         stim.draw()
     win.flip()
@@ -870,9 +957,9 @@ def run_practice(el_tracker, win, practice_faces):
 
     while session_count < MAX_PRACTICE_SESSIONS:
         if session_count > 0:
-            visual.TextStim(win,
-                            text=f"Practice Session {session_count + 1}\n\nPress ENTER to begin.",
-                            height=30, wrapWidth=1000).draw()
+            draw_all_centered_multiline_text(
+                win, f"Practice Session {session_count + 1}\n\nPress ENTER to begin.",
+                height=30, wrapWidth=1000)
             win.flip()
             wait_for_keys_or_exit(['space'])
 
@@ -899,12 +986,13 @@ def run_practice(el_tracker, win, practice_faces):
         else:
             session_count += 1
             if session_count < MAX_PRACTICE_SESSIONS:
-                visual.TextStim(win,
-                                text=f"You completed {completed_count} of "
-                                     f"{PRACTICE_TOTAL_TRIALS} practice trials.\n\n"
-                                     "Let's try another practice session.\n\n"
-                                     "Press ENTER to continue.",
-                                height=30, wrapWidth=1000).draw()
+                draw_all_centered_multiline_text(
+                    win,
+                    f"You completed {completed_count} of "
+                    f"{PRACTICE_TOTAL_TRIALS} practice trials.\n\n"
+                    "Let's try another practice session.\n\n"
+                    "Press ENTER to continue.",
+                    height=30, wrapWidth=1000)
                 win.flip()
                 wait_for_keys_or_exit(['space'])
 
@@ -922,16 +1010,16 @@ def run_ratings(win, face_images, participant_id, session):
     rating_data = []
 
     # Intro screen
-    visual.TextStim(win,
-                    text="In the next part, you will be asked to rate the same images\n"
-                         "that you have seen previously.\n\n"
-                         "The rating will be based on how familiar you are with each face\n"
-                         "and how appealing they were.",
-                    pos=(0, 20), height=28, color="white", wrapWidth=900,
-                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
-    visual.TextStim(win, text="Press ENTER to continue.",
-                    pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900,
-                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
+    draw_all_centered_multiline_text(
+        win,
+        "In the next part, you will be asked to rate the same images\n"
+        "that you have seen previously.\n\n"
+        "The rating will be based on how familiar you are with each face\n"
+        "and how appealing they were.",
+        pos=(0, 20), height=28, wrapWidth=900)
+    draw_all_centered_multiline_text(
+        win, "Press ENTER to continue.",
+        pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900)
     win.flip()
     wait_for_keys_or_exit(["space"])
 
@@ -941,13 +1029,14 @@ def run_ratings(win, face_images, participant_id, session):
     _SW = 600; _SH = 40; _LH = 22; _LC = (0.7, 0.7, 0.7)
 
     # Practice slider screen
-    instr_text    = visual.TextStim(win,
-        text="Move the slider to the right if the face felt familiar or appealing.\n"
-             "Move it to the left if not.",
-        pos=(0, 320), height=26, color="white", wrapWidth=900,
-        font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    instr_text_lines = draw_centered_multiline_text(
+        win,
+        "Move the slider to the right if the face felt familiar or appealing.\n"
+        "Move it to the left if not.",
+        pos=(0, 320), height=26, wrapWidth=900)
     practice_note = visual.TextStim(win, text="Try the sliders below before continuing:",
         pos=(0, 230), height=24, color=(0.8, 0.8, 0.8), wrapWidth=900,
+        alignText='center', anchorHoriz='center',
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     def _mk_slider(y, pos_x=0):
@@ -958,42 +1047,48 @@ def run_ratings(win, face_images, participant_id, session):
                       labelColor="white")
 
     def _mk_label(text, x, y, align):
-        return visual.TextStim(win, text=text, pos=(x, y), height=_LH,
-                               color=_LC, alignText=align, wrapWidth=100,
-                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        return draw_centered_multiline_text(
+            win, text, pos=(x, y), height=_LH, color=_LC, wrapWidth=100, align=align)
 
     prac_fam_lbl    = visual.TextStim(win, text="How familiar are you with this face?",
                                       pos=(0, 170), height=24, color="white", wrapWidth=900,
+                                      alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_fam_sl     = _mk_slider(120)
     prac_fam_left   = _mk_label("Completely\nunfamiliar", -_SW/2-110, 120, "right")
     prac_fam_right  = _mk_label("Highly\nfamiliar",      _SW/2+110,  120, "left")
     prac_att_lbl    = visual.TextStim(win, text="How appealing do you find this face?",
                                       pos=(0, 10), height=24, color="white", wrapWidth=900,
+                                      alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_att_sl     = _mk_slider(-40)
     prac_att_left   = _mk_label("Very\nunattractive", -_SW/2-110, -40, "right")
     prac_att_right  = _mk_label("Very\nattractive",   _SW/2+110,  -40, "left")
     prac_warn       = visual.TextStim(win, text="Please move both sliders before continuing.",
                                       pos=(0, -190), height=22, color=(1, 0.3, 0.3),
+                                      alignText='center', anchorHoriz='center',
                                       wrapWidth=900, font=TUTORIAL_FONT_NAME,
                                       fontFiles=TUTORIAL_FONT_FILES)
     prac_ft_wait    = visual.TextStim(win, text="Move both sliders, then press ENTER to begin rating.",
                                       pos=(0, -310), height=22, color=_LC, wrapWidth=900,
+                                      alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_ft_ready   = visual.TextStim(win, text="Press ENTER to begin rating.",
                                       pos=(0, -310), height=22, color=(0.4, 1, 0.4),
+                                      alignText='center', anchorHoriz='center',
                                       wrapWidth=900, font=TUTORIAL_FONT_NAME,
                                       fontFiles=TUTORIAL_FONT_FILES)
 
     prac_show_warn = False
     while True:
         check_for_exit()
-        instr_text.draw(); practice_note.draw()
+        for _s in instr_text_lines: _s.draw()
+        practice_note.draw()
         prac_fam_lbl.draw(); prac_fam_sl.draw()
-        prac_fam_left.draw(); prac_fam_right.draw()
-        prac_att_lbl.draw(); prac_att_sl.draw()
-        prac_att_left.draw(); prac_att_right.draw()
+        draw_lines(prac_fam_left, prac_fam_right)
+        prac_att_lbl.draw();
+        prac_att_sl.draw()
+        draw_lines(prac_att_left, prac_att_right)
         fam_done = prac_fam_sl.getRating() is not None
         att_done = prac_att_sl.getRating() is not None
         if fam_done and att_done:
@@ -1023,29 +1118,26 @@ def run_ratings(win, face_images, participant_id, session):
                         size=(SW, SH), style=["slider"], granularity=1,
                         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
                         markerColor=(0.4, 0.6, 1), labelColor="white")
-    fam_left   = visual.TextStim(win, text="Completely\nunfamiliar",
-                                 pos=(-SW/2-110, 70), height=LH, color=LC,
-                                 alignText="right", wrapWidth=100,
-                                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    fam_right  = visual.TextStim(win, text="Highly\nfamiliar",
-                                 pos=(SW/2+110, 70), height=LH, color=LC,
-                                 alignText="left", wrapWidth=100,
-                                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    fam_left = draw_centered_multiline_text(
+        win, "Completely\nunfamiliar", pos=(-SW / 2 - 110, 70), height=LH,
+        color=LC, wrapWidth=100, align="right")
+    fam_right = draw_centered_multiline_text(
+        win, "Highly\nfamiliar", pos=(SW / 2 + 110, 70), height=LH,
+        color=LC, wrapWidth=100, align="left")
     att_label  = visual.TextStim(win, text="How appealing do you find this face?",
                                  pos=(0, -60), height=26, color="white", wrapWidth=900,
+                                 alignText='center', anchorHoriz='center',
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     att_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, -110),
                         size=(SW, SH), style=["slider"], granularity=1,
                         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
                         markerColor=(0.4, 0.6, 1), labelColor="white")
-    att_left   = visual.TextStim(win, text="Very\nunattractive",
-                                 pos=(-SW/2-110, -110), height=LH, color=LC,
-                                 alignText="right", wrapWidth=100,
-                                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    att_right  = visual.TextStim(win, text="Very\nattractive",
-                                 pos=(SW/2+110, -110), height=LH, color=LC,
-                                 alignText="left", wrapWidth=100,
-                                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    att_left = draw_centered_multiline_text(
+        win, "Very\nunattractive", pos=(-SW / 2 - 110, -110), height=LH,
+        color=LC, wrapWidth=100, align="right")
+    att_right = draw_centered_multiline_text(
+        win, "Very\nattractive", pos=(SW / 2 + 110, -110), height=LH,
+        color=LC, wrapWidth=100, align="left")
     warn_stim  = visual.TextStim(win, text="Please rate both sliders before continuing.",
                                  pos=(0, -300), height=22, color=(1, 0.3, 0.3),
                                  wrapWidth=900, font=TUTORIAL_FONT_NAME,
@@ -1077,8 +1169,12 @@ def run_ratings(win, face_images, participant_id, session):
         while True:
             check_for_exit()
             face_stim.draw()
-            fam_label.draw(); fam_slider.draw(); fam_left.draw(); fam_right.draw()
-            att_label.draw(); att_slider.draw(); att_left.draw(); att_right.draw()
+            fam_label.draw();
+            fam_slider.draw();
+            draw_lines(fam_left, fam_right)
+            att_label.draw();
+            att_slider.draw();
+            draw_lines(att_left, att_right)
             fam_rated = fam_slider.getRating() is not None
             att_rated = att_slider.getRating() is not None
             if fam_rated and att_rated:
@@ -1126,9 +1222,8 @@ def run_post_task_questions(win, participant_id, session):
                                font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     def end_label(text, x, y, align):
-        return visual.TextStim(win, text=text, pos=(x, y), height=LH,
-                               color=LC, alignText=align,
-                               font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+        return draw_centered_multiline_text(
+            win, text, pos=(x, y), height=LH, color=LC, wrapWidth=300, align=align)
 
     _warn_stim = visual.TextStim(win,
                                  text="Please answer all questions before continuing.",
@@ -1189,11 +1284,11 @@ def run_post_task_questions(win, participant_id, session):
     visual.TextStim(win, text="Almost done!", pos=(0, 120), height=36,
                     bold=True, color="white", wrapWidth=860,
                     font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
-    visual.TextStim(win,
-                    text="You will now be asked a short questionnaire.\n"
-                         "Please answer all questions honestly.",
-                    pos=(0, 20), height=28, color="white", wrapWidth=860,
-                    font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES).draw()
+    draw_all_centered_multiline_text(
+        win,
+        "You will now be asked a short questionnaire.\n"
+        "Please answer all questions honestly.",
+        pos=(0, 20), height=28, wrapWidth=860)
     visual.TextStim(win, text="Press ENTER to begin.",
                     pos=(0, -310), height=22, color=(0.7, 0.7, 0.7),
                     wrapWidth=860, font=TUTORIAL_FONT_NAME,
@@ -1261,7 +1356,7 @@ def run_post_task_questions(win, participant_id, session):
         instr_box_txt.text = instr_buf
         time_q.draw();  time_box_rect.draw();  time_box_txt.draw()
         instr_q.draw(); instr_box_rect.draw(); instr_box_txt.draw()
-        impuls_q.draw(); impuls_sl.draw(); impuls_l.draw(); impuls_r.draw()
+        impuls_q.draw(); impuls_sl.draw(); draw_lines(impuls_l, impuls_r)
         punct_q.draw(); draw_mc(punct_mc, punct_sel)
         all_done1 = (time_buf != "" and impuls_sl.getRating() is not None
                      and punct_sel is not None)
@@ -1281,23 +1376,29 @@ def run_post_task_questions(win, participant_id, session):
     event.clearEvents(); core.wait(0.1); mouse.clickReset()
     face_rec_q  = q_title("Do you have a problem recognising faces?", y=290)
     face_rec_sl = make_slider(240)
-    face_rec_l  = end_label("Very poor at\nrecognising faces", -SW/2-110, 240, "right")
-    face_rec_r  = end_label("Very good at\nrecognising faces",  SW/2+110, 240, "left")
+    face_rec_l  = end_label("Very poor at\nrecognising faces", -SW/2-110, 240, "center")
+    face_rec_r  = end_label("Very good at\nrecognising faces",  SW/2+110, 240, "center")
     tired_q     = q_title("How tired are you right now?", y=130)
     tired_sl    = make_slider(80)
-    tired_l     = end_label("Not at all\ntired", -SW/2-110, 80, "right")
-    tired_r     = end_label("Extremely\ntired",  SW/2+110,  80, "left")
+    tired_l     = end_label("Not at all\ntired", -SW/2-110, 80, "center")
+    tired_r     = end_label("Extremely\ntired",  SW/2+110,  80, "center")
     enjoy_q     = q_title("How much did you enjoy this experiment?", y=-80)
     enjoy_sl    = make_slider(-130)
-    enjoy_l     = end_label("Not at all", -SW/2-110, -130, "right")
-    enjoy_r     = end_label("Very much",  SW/2+110,  -130, "left")
+    enjoy_l     = end_label("Not at all", -SW/2-110, -130, "center")
+    enjoy_r     = end_label("Very much",  SW/2+110,  -130, "center")
     show_warn2  = False
 
     while True:
         check_for_exit()
-        face_rec_q.draw(); face_rec_sl.draw(); face_rec_l.draw(); face_rec_r.draw()
-        tired_q.draw();    tired_sl.draw();    tired_l.draw();    tired_r.draw()
-        enjoy_q.draw();    enjoy_sl.draw();    enjoy_l.draw();    enjoy_r.draw()
+        face_rec_q.draw();
+        face_rec_sl.draw();
+        draw_lines(face_rec_l, face_rec_r)
+        tired_q.draw();
+        tired_sl.draw();
+        draw_lines(tired_l, tired_r)
+        enjoy_q.draw();
+        enjoy_sl.draw();
+        draw_lines(enjoy_l, enjoy_r)
         all_done2 = (face_rec_sl.getRating() is not None and
                      tired_sl.getRating()    is not None and
                      enjoy_sl.getRating()    is not None)
@@ -1518,6 +1619,17 @@ def main():
     random.shuffle(trial_face_list)
 
     # ----- Main experiment -----
+    behavioral_fieldnames = ['participant_id', 'session', 'trial_num', 'is_practice',
+                             'face_image', 'face_familiarity', 'face_source',
+                             'face_duration_planned_s', 'face_duration_actual_s',
+                             'reproduced_duration_s', 'reproduction_error_s']
+
+    behavioral_file = open(behavioral_fname, 'w', newline='')
+    behavioral_writer = csv.DictWriter(behavioral_file, fieldnames=behavioral_fieldnames)
+    behavioral_writer.writeheader()
+    behavioral_file.flush()
+    os.fsync(behavioral_file.fileno())
+
     for trial_num, (face_img, dur) in enumerate(trial_face_list):
         td = run_trial(el_tracker, win,
                        trial_num=trial_num,
@@ -1525,14 +1637,24 @@ def main():
                        face_duration_s=dur,
                        is_practice=False)
         if td == 'SKIP':
-            print("[DEBUG] Skipping remaining experiment trials."); break
+            print("[DEBUG] Skipping remaining experiment trials.");
+            break
         if td is not None:
             td['participant_id'] = exp_info['Participant ID']
-            td['session']        = exp_info['Session']
+            td['session'] = exp_info['Session']
             all_behavioral_data.append(td)
+
+            # Write this trial to disk immediately, so it survives a crash.
+            behavioral_writer.writerow(td)
+            behavioral_file.flush()
+            os.fsync(behavioral_file.fileno())
+            print(f"[DEBUG] Trial {trial_num} saved to disk.")
+
         check_for_exit()
         if 'escape' in event.getKeys():
             break
+
+    behavioral_file.close()
 
     # ----- Wrap up EyeLink -----
     el_tracker.sendMessage("EXPERIMENT_END")
@@ -1610,9 +1732,9 @@ def main():
     el_tracker.close()
 
     # ----- Thank you -----
-    visual.TextStim(win,
-                    text="Thank you for participating!\n\nPress any key to exit.",
-                    height=30).draw()
+    draw_all_centered_multiline_text(
+        win, "Thank you for participating!\n\nPress any key to exit.",
+        height=30)
     win.flip()
     event.waitKeys()
 
