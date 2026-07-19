@@ -613,6 +613,12 @@ def draw_lines(*stim_lists):
         else:
             item.draw()
 
+def shrink_slider_marker(slider_obj, marker_width_px=18):
+    """PsychoPy 3.2.4's style='slider' hardcodes marker width to 10% of the
+    slider's width, which visibly overflows the track at rating 0/100.
+    This shrinks it to a fixed, less obtrusive width post-construction."""
+    slider_obj.marker.width = marker_width_px
+
 # ==============================================================================
 # FIXATION CROSS HELPERS
 # ==============================================================================
@@ -1040,11 +1046,13 @@ def run_ratings(win, face_images, participant_id, session):
         font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
 
     def _mk_slider(y, pos_x=0):
-        return Slider(win, ticks=(0, 100), labels=None, pos=(pos_x, y),
-                      size=(_SW, _SH), style=["slider"], granularity=1,
-                      color="white", fillColor=(0.4, 0.6, 1),
-                      borderColor="white", markerColor=(0.4, 0.6, 1),
-                      labelColor="white")
+        s = Slider(win, ticks=(0, 100), labels=None, pos=(pos_x, y),
+                  size=(_SW, _SH), style=["slider"], granularity=1,
+                  color="white", fillColor=(0.4, 0.6, 1),
+                  borderColor="white", markerColor=(0.4, 0.6, 1),
+                  labelColor="white")
+        shrink_slider_marker(s)
+        return s
 
     def _mk_label(text, x, y, align):
         return draw_centered_multiline_text(
@@ -1118,6 +1126,7 @@ def run_ratings(win, face_images, participant_id, session):
                         size=(SW, SH), style=["slider"], granularity=1,
                         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
                         markerColor=(0.4, 0.6, 1), labelColor="white")
+    shrink_slider_marker(fam_slider)
     fam_left = draw_centered_multiline_text(
         win, "Completely\nunfamiliar", pos=(-SW / 2 - 110, 70), height=LH,
         color=LC, wrapWidth=100, align="right")
@@ -1132,6 +1141,7 @@ def run_ratings(win, face_images, participant_id, session):
                         size=(SW, SH), style=["slider"], granularity=1,
                         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
                         markerColor=(0.4, 0.6, 1), labelColor="white")
+    shrink_slider_marker(att_slider)
     att_left = draw_centered_multiline_text(
         win, "Very\nunattractive", pos=(-SW / 2 - 110, -110), height=LH,
         color=LC, wrapWidth=100, align="right")
@@ -1244,10 +1254,12 @@ def run_post_task_questions(win, participant_id, session):
         _footer_stim.pos = (0, y); return _footer_stim
 
     def make_slider(y):
-        return Slider(win, ticks=(0, 100), labels=None, pos=(0, y),
-                      size=(SW, SH), style=["slider"], granularity=1,
-                      color='white', fillColor=(0.4, 0.6, 1),
-                      borderColor='white', markerColor=(0.4, 0.6, 1))
+        s = Slider(win, ticks=(0, 100), labels=None, pos=(0, y),
+                   size=(SW, SH), style=["slider"], granularity=1,
+                   color='white', fillColor=(0.4, 0.6, 1),
+                   borderColor='white', markerColor=(0.4, 0.6, 1))
+        shrink_slider_marker(s)
+        return s
 
     def make_mc(options, y_top, spacing=38):
         items = []
