@@ -151,8 +151,8 @@ SCREEN_HEIGHT_CM = 22.8 # physical height of projected image in cm <-- update to
 PRE_FACE_FIX_DURATION  = 0.500  # gray fixation cross before face
 FACE_DURATIONS         = (0.800, 1.600)  # face durations
 POST_FACE_FIX_DURATION = 0.500  # gray fixation cross after face, before reproduction
-ITI_DURATION           = 0.500  # blank ITI after J press
-REPRODUCTION_KEY       = 'j'
+ITI_DURATION           = 0.500  # blank ITI after SPACE press
+REPRODUCTION_KEY       = 'space'
 
 # Fixation cross visual params
 FIX_SIZE_PIX            = 30
@@ -811,7 +811,7 @@ def _show_practice_intro(win, practice_faces):
          ("large cross", True), (" to the", False)], y=180, height=28)
     _line("duration of the face you just saw.", y=140, height=28).draw()
     _mixed_bold_line(
-        [("Press the ", False), ("J key", True),
+        [("Press the ", False), ("SPACES bar", True),
          (" when you think the ", False), ("same amount of time", True),
          (" has passed.", False)], y=60, height=28)
     _draw_fix(fix_large_demo)
@@ -838,7 +838,7 @@ def _show_post_practice_screen(win):
                         fontFiles=TUTORIAL_FONT_FILES),
         visual.TextStim(win,
                         text=("Pay attention to how long the face is shown.\n"
-                              "Then, when the large cross appears, press the J KEY\n"
+                              "Then, when the large cross appears, press the SPACE bar\n"
                               "when you think the same amount of time has passed."),
                         pos=(0, 80), height=26, color="white",
                         wrapWidth=900, font=TUTORIAL_FONT_NAME,
