@@ -474,20 +474,20 @@ def run_calibration(el_tracker, win):
     # win.winHandle.activate() alone is insufficient on Windows when another
     # application (e.g. PyCharm) holds the foreground lock — the EyeLink menu
     # is drawn but keypresses (Enter, C, V, O) go to the wrong window.
-    try:
-        import ctypes
-        hwnd = win._hw_handle   # pyglet HWND for this window
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-        ctypes.windll.user32.BringWindowToTop(hwnd)
-        ctypes.windll.user32.SetFocus(hwnd)
-        print("[DEBUG] ctypes focus applied to PsychoPy window")
-    except Exception as e:
-        print(f"[WARNING] ctypes focus failed: {e}")
-        try:
-            win.winHandle.activate()
-            win.winHandle.set_visible(True)
-        except Exception:
-            pass
+    # try:
+    #     import ctypes
+    #     hwnd = win._hw_handle   # pyglet HWND for this window
+    #     ctypes.windll.user32.SetForegroundWindow(hwnd)
+    #     ctypes.windll.user32.BringWindowToTop(hwnd)
+    #     ctypes.windll.user32.SetFocus(hwnd)
+    #     print("[DEBUG] ctypes focus applied to PQsychoPy window")
+    # except Exception as e:
+    #     print(f"[WARNING] ctypes focus failed: {e}")
+    #     try:
+    #         win.winHandle.activate()
+    #         win.winHandle.set_visible(True)
+    #     except Exception:
+    #         pass
 
     try:
         print("[DEBUG] calling doTrackerSetup...", flush=True)
