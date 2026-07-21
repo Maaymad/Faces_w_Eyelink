@@ -698,6 +698,13 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     familiarity, face_source = _classify_face(face_image)
 
     # ----- EyeLink messages & start recording -----
+    # setOfflineMode() before each trial's startRecording() resets the
+    # tracker's internal recording state; without it, the Host PC can
+    # silently stop writing samples to the EDF after a handful of trials
+    # while startRecording() keeps reporting success.
+    el_tracker.setOfflineMode()
+    core.wait(0.05)
+
     el_tracker.sendMessage(f"TRIAL_START {trial_num}")
     if is_practice:
         el_tracker.sendMessage("PRACTICE_TRIAL")
