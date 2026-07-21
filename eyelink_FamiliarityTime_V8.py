@@ -644,22 +644,17 @@ def _draw_fix(fix_components):
 
 def _classify_face(face_path):
     """
-    Return (familiarity, source) from the parent folder name.
+    Return (familiarity, source) from the image filename prefix.
 
-    Expected layout:
-        experimental_faces/uk_celebrities/...
-        experimental_faces/israeli_celebrities/...
-        experimental_faces/database_faces/...
+    Filenames are expected to look like IL_F_12.jpeg or UK_M_02.jpeg.
     """
-    parent = os.path.basename(os.path.dirname(face_path)).lower()
-    if 'uk' in parent:
-        return 'familiar', 'uk'
-    elif 'israeli' in parent:
-        return 'familiar', 'israeli'
-    elif 'database' in parent:
-        return 'unfamiliar', 'database'
+    fname = os.path.basename(face_path).upper()
+    if fname.startswith('IL'):
+        return 'IL', 'israeli'
+    elif fname.startswith('UK'):
+        return 'UK', 'uk'
     else:
-        return 'unknown', parent
+        return 'unknown', 'unknown'
 
 
 # ==============================================================================
@@ -1664,7 +1659,7 @@ def main():
             all_behavioral_data.append(td)
 
             # Write this trial to disk immediately, so it survives a crash.
-            behavioral_writer.writerow(td)
+            behavioral_writer.writerow({**td, 'face_image': os.path.basename(td['face_image'])})
             behavioral_file.flush()
             os.fsync(behavioral_file.fileno())
             print(f"[DEBUG] Trial {trial_num} saved to disk.")
@@ -1690,7 +1685,8 @@ def main():
         with open(behavioral_fname, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows(all_behavioral_data)
+            writer.writerows({**td, 'face_image': os.path.basename(td['face_image'])}
+                              for td in all_behavioral_data)
         print(f"Behavioural data saved: {behavioral_fname}")
 
     # ----- Ratings -----
