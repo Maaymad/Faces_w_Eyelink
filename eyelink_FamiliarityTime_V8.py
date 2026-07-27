@@ -644,17 +644,17 @@ def _draw_fix(fix_components):
 
 def _classify_face(face_path):
     """
-    Return (familiarity, source) from the image filename prefix.
+    Return the face's nationality, classified from the image filename prefix.
 
     Filenames are expected to look like IL_F_12.jpeg or UK_M_02.jpeg.
     """
     fname = os.path.basename(face_path).upper()
     if fname.startswith('IL'):
-        return 'IL', 'israeli'
+        return 'israeli'
     elif fname.startswith('UK'):
-        return 'UK', 'uk'
+        return 'uk'
     else:
-        return 'unknown', 'unknown'
+        return 'unknown'
 
 
 # ==============================================================================
@@ -690,15 +690,14 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
                                  size_pix=FIX_SIZE_REPRODUCTION_PIX)
 
-    familiarity, face_source = _classify_face(face_image)
+    face_nationality = _classify_face(face_image)
 
     # ----- EyeLink messages & start recording -----
     el_tracker.sendMessage(f"TRIAL_START {trial_num}")
     if is_practice:
         el_tracker.sendMessage("PRACTICE_TRIAL")
     el_tracker.sendMessage(f"FACE_IMAGE {os.path.basename(face_image)}")
-    el_tracker.sendMessage(f"FACE_FAMILIARITY {familiarity}")
-    el_tracker.sendMessage(f"FACE_SOURCE {face_source}")
+    el_tracker.sendMessage(f"FACE_NATIONALITY {face_nationality}")
     el_tracker.sendMessage(f"FACE_DURATION_PLANNED_MS {int(face_duration_s * 1000)}")
 
     error = el_tracker.startRecording(1, 1, 1, 1)
@@ -779,15 +778,14 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     el_tracker.sendMessage(f"TRIAL_END {trial_num}")
 
     return {
-        'trial_num':             trial_num,
-        'is_practice':           is_practice,
-        'face_image':            face_image,
-        'face_familiarity':      familiarity,
-        'face_source':           face_source,
+        'trial_num': trial_num,
+        'is_practice': is_practice,
+        'face_image': face_image,
+        'face_nationality': face_nationality,
         'face_duration_planned_s': face_duration_s,
-        'face_duration_actual_s':  actual_face_duration,
-        'reproduced_duration_s':   reproduced_duration,
-        'reproduction_error_s':    reproduced_duration - face_duration_s,
+        'face_duration_actual_s': actual_face_duration,
+        'reproduced_duration_s': reproduced_duration,
+        'reproduction_error_s': reproduced_duration - face_duration_s,
     }
 
 
@@ -1194,14 +1192,15 @@ def run_ratings(win, face_images, participant_id, session):
                 if fam_rated and att_rated: break
                 else: show_warning = True
 
-        fv = fam_slider.getRating(); av = att_slider.getRating()
+        fv = fam_slider.getRating();
+        av = att_slider.getRating()
         if fv is not None and av is not None:
             rating_data.append({
-                "participant_id":       participant_id,
-                "session":              session,
-                "face_image":           face_path,
-                "familiarity_rating":   int(fv),
-                "attractiveness_rating":int(av),
+                "participant_id": participant_id,
+                "session": session,
+                "face_image": os.path.splitext(os.path.basename(face_path))[0],
+                "familiarity_rating": int(fv),
+                "attractiveness_rating": int(av),
             })
 
     #win.mouseVisible = False
@@ -1627,7 +1626,7 @@ def main():
 
     # ----- Main experiment -----
     behavioral_fieldnames = ['participant_id', 'session', 'trial_num', 'is_practice',
-                             'face_image', 'face_familiarity', 'face_source',
+                             'face_image', 'face_nationality',
                              'face_duration_planned_s', 'face_duration_actual_s',
                              'reproduced_duration_s', 'reproduction_error_s']
 
@@ -1637,7 +1636,7 @@ def main():
     behavioral_file.flush()
     os.fsync(behavioral_file.fileno())
 
-    for trial_num, (face_img, dur) in enumerate(trial_face_list):
+    for trial_num, (face_img, dur) in enumerate(trial_face_list, start=1):
         td = run_trial(el_tracker, win,
                        trial_num=trial_num,
                        face_image=face_img,
@@ -1652,7 +1651,7 @@ def main():
             all_behavioral_data.append(td)
 
             # Write this trial to disk immediately, so it survives a crash.
-            behavioral_writer.writerow({**td, 'face_image': os.path.basename(td['face_image'])})
+            behavioral_writer.writerow({**td, 'face_image': os.path.splitext(os.path.basename(td['face_image']))[0]})
             behavioral_file.flush()
             os.fsync(behavioral_file.fileno())
             print(f"[DEBUG] Trial {trial_num} saved to disk.")
@@ -1672,14 +1671,14 @@ def main():
     # ----- Save behavioural CSV -----
     if all_behavioral_data:
         fieldnames = ['participant_id', 'session', 'trial_num', 'is_practice',
-                      'face_image', 'face_familiarity', 'face_source',
+                      'face_image', 'face_nationality',
                       'face_duration_planned_s', 'face_duration_actual_s',
                       'reproduced_duration_s', 'reproduction_error_s']
         with open(behavioral_fname, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows({**td, 'face_image': os.path.basename(td['face_image'])}
-                              for td in all_behavioral_data)
+            writer.writerows({**td, 'face_image': os.path.splitext(os.path.basename(td['face_image']))[0]}
+                             for td in all_behavioral_data)
         print(f"Behavioural data saved: {behavioral_fname}")
 
     # ----- Ratings -----
