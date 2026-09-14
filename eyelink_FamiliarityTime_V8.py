@@ -745,6 +745,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
             el_tracker.stopRecording(); return None
 
     # ===== (d) White fixation — reproduction phase =====
+    REPRODUCTION_TIMEOUT = 10.0  # seconds; no data saved if exceeded
     event.clearEvents()
     repro_clk = core.Clock(); repro_clk.reset()
     el_tracker.sendMessage("REPRODUCTION_ONSET")
@@ -753,6 +754,24 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         check_for_exit()
         if check_for_skip():
             el_tracker.stopRecording(); return 'SKIP'
+        # Timeout: no response within 10 s -> remind and discard trial
+        if repro_clk.getTime() > REPRODUCTION_TIMEOUT:
+            el_tracker.stopRecording()
+            el_tracker.sendMessage("REPRODUCTION_TIMEOUT")
+            win.color = (-1, -1, -1)
+            safe_flip(win)
+            reminder_lines = draw_centered_multiline_text(
+                win,
+                "Please remember to press SPACE\nto indicate the duration you saw.\n\nPress SPACE to continue.",
+                pos=(0, 0), height=36, color=(1, 0.4, 0.4))
+            for s in reminder_lines:
+                s.draw()
+            safe_flip(win)
+            event.clearEvents()
+            event.waitKeys(keyList=['space'])
+            win.color = (-1, -1, -1)
+            safe_flip(win)
+            return None  # no data recorded for this trial
         _draw_fix(fix_repro)
         win.flip()
         keys = event.getKeys(keyList=[REPRODUCTION_KEY, 'escape'],
