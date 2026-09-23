@@ -1,0 +1,7 @@
+# Python 3.6.6
+
+keyboard==0.13.5
+numpy==1.15.0
+Pillow==12.3.0
+PsychoPy==3.2.4
+pylink==0.3.3
