@@ -478,7 +478,7 @@ def run_calibration(el_tracker, win):
         print(f"[DEBUG] Calibration sounds loaded from {_sounds_dir}")
     else:
         print(f"[WARNING] Calibration sound files missing in {_sounds_dir} "
-              f"— calibration may crash without them.")
+              f"- calibration may crash without them.")
 
     el_tracker.sendCommand("calibration_type = HV9")
 
@@ -948,7 +948,7 @@ def _show_practice_intro(win, practice_faces):
           "fixation cross below the center of the screen.", y=280, height=28).draw()
     _mixed_bold_line(
         [("Look directly at the cross", True),
-         (" — once your gaze is detected on it,", False)], y=170, height=26)
+         (" - once your gaze is detected on it,", False)], y=170, height=26)
     _line("a face will appear above it.", y=135, height=26).draw()
     _draw_fix(fix_small)
     _footer(pos=(0, _fix_small_pos[1] - 90)).draw()
@@ -1032,7 +1032,7 @@ def _show_post_practice_screen(win):
         "when you think the same amount of time has passed.",
         y=80, height=26)
     lines += _multiline_centered(
-        "Only start timing at the large cross — not during the small crosses.",
+        "Only start timing at the large cross - not during the small crosses.",
         y=-60, height=26, bold=True)
     lines += _multiline_centered(
         "The experiment will start in the next screen. Be ready!",
