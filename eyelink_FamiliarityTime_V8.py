@@ -16,6 +16,12 @@ V8 changes vs V7:
     while blocked inside pylink calls like doTrackerSetup(), where the
     normal Shift+Q check_for_exit() cannot run because control has passed
     to SR Research's own event loop.
+  - Pre-face fixation cross moved to sit below the face image location, and
+    the pre-face fixation period is now gaze-contingent: the participant
+    must hold gaze on the cross (within FORCED_FIXATION_TOLERANCE_DEG)
+    continuously for PRE_FACE_FIX_DURATION before the face appears, instead
+    of a blind timed wait. Falls back to a timed wait in DEBUG_MODE, where
+    no real gaze samples are available.
 """
 
 import pylink
@@ -148,9 +154,9 @@ SCREEN_WIDTH_CM = 40.6  # physical width of projected image in cm  <-- update to
 SCREEN_HEIGHT_CM = 22.8 # physical height of projected image in cm <-- update to actual
 
 # Timing parameters (seconds)
-PRE_FACE_FIX_DURATION  = 0.500  # gray fixation cross before face
+PRE_FACE_FIX_DURATION  = 0.500  # required continuous gaze-contingent fixation before face onset
 FACE_DURATIONS         = (0.800, 1.600)  # face durations
-POST_FACE_FIX_DURATION = 0.500  # gray fixation cross after face, before reproduction
+POST_FACE_FIX_DURATION = 0.500  # gray fixation cross after face, before reproduction (ISI)
 ITI_DURATION           = 0.500  # blank ITI after SPACE press
 REPRODUCTION_KEY       = 'space'
 
@@ -160,6 +166,12 @@ FIX_LINE_WIDTH_PIX      = 4
 FIX_COLOR_GRAY          = (0.3, 0.3, 0.3)
 FIX_COLOR_REPRODUCTION  = (1, 1, 1)      # white — visible on black background
 FIX_SIZE_REPRODUCTION_PIX = 40
+
+# Pre-face fixation cross is placed below the face image location. Gaze must
+# land within FORCED_FIXATION_TOLERANCE_DEG of the cross continuously for
+# PRE_FACE_FIX_DURATION before the face is shown.
+FIX_BELOW_IMAGE_GAP_PIX        = 40   # gap (pixels) between bottom of face image and the cross
+FORCED_FIXATION_TOLERANCE_DEG  = 2.0  # radius (degrees) of the gaze-contingent fixation window
 
 # Practice demo cross (shown in tutorial screens only)
 PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX = FIX_SIZE_REPRODUCTION_PIX
@@ -623,12 +635,14 @@ def shrink_slider_marker(slider_obj, marker_width_px=18):
 # FIXATION CROSS HELPERS
 # ==============================================================================
 
-def _make_fix_cross(win, color, size_pix=FIX_SIZE_PIX, line_width_pix=FIX_LINE_WIDTH_PIX):
+def _make_fix_cross(win, color, size_pix=FIX_SIZE_PIX, line_width_pix=FIX_LINE_WIDTH_PIX,
+                     pos=(0, 0)):
+    cx, cy = pos
     horiz = visual.Line(win,
-                        start=(-size_pix / 2, 0), end=(size_pix / 2, 0),
+                        start=(cx - size_pix / 2, cy), end=(cx + size_pix / 2, cy),
                         lineColor=color, lineWidth=line_width_pix)
     vert  = visual.Line(win,
-                        start=(0, -size_pix / 2), end=(0, size_pix / 2),
+                        start=(cx, cy - size_pix / 2), end=(cx, cy + size_pix / 2),
                         lineColor=color, lineWidth=line_width_pix)
     return [horiz, vert]
 
@@ -664,7 +678,8 @@ def _classify_face(face_path):
 def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
               is_practice=False):
     """
-    Single trial: gray fix → face → gray fix → white fix (reproduction) → ITI.
+    Single trial: gaze-contingent gray fix (below face location) → face →
+    gray fix (ISI) → white fix (reproduction) → ITI.
 
     Returns trial_data dict, None on escape/abort, or 'SKIP' on Shift+S.
     """
@@ -686,7 +701,9 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     else:
         face_size = (face_width_pix, face_height_pix)
     face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
-    fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY)
+    fix_pos    = (0, -(face_size[1] / 2) - FIX_BELOW_IMAGE_GAP_PIX)  # below the face location
+    fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY, pos=fix_pos)  # pre-face, gaze-contingent
+    fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
                                  size_pix=FIX_SIZE_REPRODUCTION_PIX)
 
@@ -706,10 +723,23 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         return None
     core.wait(0.1)
 
-    # ===== (a) Pre-face gray fixation =====
+    # ===== (a) Pre-face gray fixation (gaze-contingent, below face location) =====
+    # The cross sits below where the face will appear. Gaze must stay within
+    # FORCED_FIXATION_TOLERANCE_DEG of the cross continuously for
+    # PRE_FACE_FIX_DURATION before the face is shown. In DEBUG_MODE, el_tracker
+    # is a DummyEyeLink whose getNewestSample() always returns None, so this
+    # falls back to a plain timed wait -- the experiment stays runnable
+    # without real tracker hardware connected.
+    scn_w, scn_h = win.size
+    el_fix_x = scn_w / 2 + fix_pos[0]
+    el_fix_y = scn_h / 2 - fix_pos[1]  # PsychoPy y-axis is flipped vs EyeLink
+    fixation_tolerance_pix = degrees_to_pixels(
+        FORCED_FIXATION_TOLERANCE_DEG, MONITOR_DISTANCE, SCREEN_WIDTH_CM, SCREEN_WIDTH)
+
     clk = core.Clock(); clk.reset()
+    gaze_inside_start = None
     el_tracker.sendMessage("PRE_FACE_FIX_ONSET")
-    while clk.getTime() < PRE_FACE_FIX_DURATION:
+    while True:
         check_for_exit()
         if check_for_skip():
             el_tracker.stopRecording(); return 'SKIP'
@@ -717,6 +747,45 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         win.flip()
         if event.getKeys(keyList=['escape']):
             el_tracker.stopRecording(); return None
+
+        if DEBUG_MODE:
+            # No live gaze samples available -- just wait the required duration.
+            if gaze_inside_start is None:
+                gaze_inside_start = clk.getTime()
+            if clk.getTime() - gaze_inside_start >= PRE_FACE_FIX_DURATION:
+                break
+            continue
+
+        sample = el_tracker.getNewestSample()
+        gaze_right = gaze_left = None
+        if sample is not None:
+            if sample.isRightSample():
+                gaze_right = sample.getRightEye().getGaze()
+            if sample.isLeftSample():
+                gaze_left = sample.getLeftEye().getGaze()
+        if gaze_right is not None and gaze_left is not None:
+            gaze_pos = ((gaze_right[0] + gaze_left[0]) / 2,
+                        (gaze_right[1] + gaze_left[1]) / 2)
+        elif gaze_right is not None:
+            gaze_pos = gaze_right
+        elif gaze_left is not None:
+            gaze_pos = gaze_left
+        else:
+            gaze_pos = None
+
+        inside = False
+        if gaze_pos is not None:
+            dist = ((gaze_pos[0] - el_fix_x) ** 2 + (gaze_pos[1] - el_fix_y) ** 2) ** 0.5
+            inside = dist <= fixation_tolerance_pix
+
+        if inside:
+            if gaze_inside_start is None:
+                gaze_inside_start = clk.getTime()
+            elif clk.getTime() - gaze_inside_start >= PRE_FACE_FIX_DURATION:
+                break
+        else:
+            gaze_inside_start = None
+    el_tracker.sendMessage("PRE_FACE_FIX_GAZE_OK")
 
     # ===== (b) Face =====
     face_clk = core.Clock(); face_clk.reset()
@@ -732,14 +801,14 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     actual_face_duration = face_clk.getTime()
     el_tracker.sendMessage("FACE_OFFSET")
 
-    # ===== (c) Post-face gray fixation =====
+    # ===== (c) Post-face gray fixation (ISI, centered — unchanged) =====
     post_clk = core.Clock(); post_clk.reset()
     el_tracker.sendMessage("POST_FACE_FIX_ONSET")
     while post_clk.getTime() < POST_FACE_FIX_DURATION:
         check_for_exit()
         if check_for_skip():
             el_tracker.stopRecording(); return 'SKIP'
-        _draw_fix(fix_gray)
+        _draw_fix(fix_gray_center)
         win.flip()
         if event.getKeys(keyList=['escape']):
             el_tracker.stopRecording(); return None
@@ -813,7 +882,9 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 # ==============================================================================
 
 def _show_practice_intro(win, practice_faces):
-    fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY)
+    _demo_face_w, _demo_face_h = calculate_face_size()
+    _fix_small_pos = (0, -(_demo_face_h / 2) - FIX_BELOW_IMAGE_GAP_PIX)  # matches run_trial
+    fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
     fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
                                      size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX)
 
@@ -873,10 +944,14 @@ def _show_practice_intro(win, practice_faces):
             x += w
 
     # Screen 1
-    _line("In every trial of the experiment, you will see a small\n"
-          "fixation cross, followed by a face.", y=220).draw()
+    _line("In every trial of the experiment, you will first see a small\n"
+          "fixation cross below the center of the screen.", y=280, height=28).draw()
+    _mixed_bold_line(
+        [("Look directly at the cross", True),
+         (" — once your gaze is detected on it,", False)], y=170, height=26)
+    _line("a face will appear above it.", y=135, height=26).draw()
     _draw_fix(fix_small)
-    _footer().draw()
+    _footer(pos=(0, _fix_small_pos[1] - 90)).draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
 
@@ -908,12 +983,13 @@ def _show_practice_intro(win, practice_faces):
     wait_for_keys_or_exit(['space'])
 
     # Screen 3
-    _line("When the face disappears, the small fixation cross will reappear.\n"
-          "After, a large fixation cross will appear.", y=260, height=28).draw()
+    _line("When the face disappears, a small fixation cross will reappear\n"
+          "at the center of the screen. After, a large fixation cross\n"
+          "will appear in the same place.", y=270, height=28).draw()
     _mixed_bold_line(
         [("Your task is to match the duration of this ", False),
-         ("large cross", True), (" to the", False)], y=180, height=28)
-    _line("duration of the face you just saw.", y=140, height=28).draw()
+         ("large cross", True), (" to the", False)], y=165, height=28)
+    _line("duration of the face you just saw.", y=125, height=28).draw()
     _mixed_bold_line(
         [("Press the ", False), ("SPACE bar", True),
          (" when you think the ", False), ("same amount of time", True),
