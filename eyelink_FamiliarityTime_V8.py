@@ -190,13 +190,6 @@ FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge
 # with margin.
 FORCED_FIXATION_TOLERANCE_PIX  = 100
 
-# Practice demo cross (shown in tutorial screens only) -- mirrors the real
-# reproduction cue exactly, so derive from the same constants rather than
-# duplicating them (avoids the two drifting apart).
-PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX       = FIX_SIZE_REPRODUCTION_PIX
-PRACTICE_DEMO_LARGE_CROSS_LINE_WIDTH_PIX = FIX_LINE_WIDTH_REPRODUCTION_PIX
-PRACTICE_DEMO_LARGE_CROSS_COLOR          = FIX_COLOR_REPRODUCTION
-
 # Tutorial font
 _PSYCHOPY_FONT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(visual.__file__)), 'assets', 'fonts')
@@ -954,9 +947,6 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 def _show_practice_intro(win, practice_faces):
     _fix_small_pos = (0, -(SCREEN_HEIGHT / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # matches run_trial
     fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
-    fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
-                                     size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX,
-                                     line_width_pix=PRACTICE_DEMO_LARGE_CROSS_LINE_WIDTH_PIX)
 
     class _MultiLineCentered:
         """Draws each line of a multi-line string as its own centered
@@ -1054,17 +1044,16 @@ def _show_practice_intro(win, practice_faces):
 
     # Screen 3
     _line("When the face disappears, a small fixation cross will reappear\n"
-          "at the center of the screen. After, a large fixation cross\n"
-          "will appear in the same place.", y=270, height=28).draw()
+          "at the center of the screen. After, a larger black fixation\n"
+          "cross will appear in the same place.", y=270, height=28).draw()
     _mixed_bold_line(
-        [("Your task is to match the duration of this ", False),
+        [("Your task is to match the duration of the ", False),
          ("large cross", True), (" to the", False)], y=165, height=28)
     _line("duration of the face you just saw.", y=125, height=28).draw()
     _mixed_bold_line(
         [("Press the ", False), ("SPACE bar", True),
          (" when you think the ", False), ("same amount of time", True),
          (" has passed.", False)], y=60, height=28)
-    _draw_fix(fix_large_demo)
     _footer().draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
