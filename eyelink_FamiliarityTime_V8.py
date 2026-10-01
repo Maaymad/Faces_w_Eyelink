@@ -851,13 +851,13 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
             safe_flip(win)
             reminder_lines = draw_centered_multiline_text(
                 win,
-                "Please remember to press SPACE\nto indicate the duration you saw.\n\nPress SPACE to continue.",
+                "Please remember to press SPACE\nto indicate the duration you saw.\n\nPress ENTER to continue.",
                 pos=(0, 0), height=36, color=(1, 0.4, 0.4))
             for s in reminder_lines:
                 s.draw()
             safe_flip(win)
             event.clearEvents()
-            event.waitKeys(keyList=['space'])
+            event.waitKeys(keyList=['space', 'return'])
             win.color = (-1, -1, -1)
             safe_flip(win)
             return None  # no data recorded for this trial
@@ -1118,16 +1118,17 @@ def run_practice(el_tracker, win, practice_faces):
                     _show_practice_trial_feedback(
                         win,
                         "Too slow!\n\n"
-                        "Your task is to match the duration of the large cross to "
-                        "the duration of the face you just saw. Press the SPACE bar "
+                        "Your task is to match the duration of the large cross to\n"
+                        "the duration of the face you just saw. Press the SPACE bar\n"
                         "when you think the same amount of time has passed.\n\n"
                         "Press ENTER to continue.")
                 elif error_s > PRACTICE_ERROR_FEEDBACK_SEC:
                     feedback_given = True
                     _show_practice_trial_feedback(
                         win,
-                        "You could do better!\n\nTry to match the duration of the "
-                        "large cross more closely to the face you saw.\n\n"
+                        "You could do better!\n\n"
+                        "Try to match the duration of the large cross more closely\n"
+                        "to the face you saw.\n\n"
                         "Press ENTER to continue.")
             # td is None: the 10s no-response reminder inside run_trial already
             # covers the "failed to respond" case -- no extra feedback needed here.
