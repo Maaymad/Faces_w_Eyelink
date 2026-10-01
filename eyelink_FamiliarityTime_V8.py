@@ -179,10 +179,7 @@ FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (wa
 # within FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
 FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge of the screen
-# Radius 2x the cross's size (diameter = 4x) -- widened from 1x/diameter=2x
-# because gaze accuracy this close to the bottom edge is worse than near
-# screen center (likely outside the HV9 calibration's well-covered area).
-FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX * 2
+FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX  # ROI radius; diameter = 2x the cross's size
 
 # Practice demo cross (shown in tutorial screens only) -- mirrors the real
 # reproduction cue exactly, so derive from the same constants rather than
@@ -729,7 +726,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     else:
         face_size = (face_width_pix, face_height_pix)
     face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
-    fix_pos    = (0, -(win.size[1] / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # fixed, every trial
+    fix_pos    = (0, -(SCREEN_HEIGHT / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # fixed, every trial
     fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY, pos=fix_pos)  # pre-face, gaze-contingent
     fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
@@ -759,11 +756,12 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     # is a DummyEyeLink whose getNewestSample() always returns None, so this
     # falls back to a plain timed wait -- the experiment stays runnable
     # without real tracker hardware connected.
-    # NOTE: unlike drift_correct()/run_calibration(), no scn_w/2, scn_h/2
-    # recentering here -- confirmed against live gaze samples on the actual
-    # EyeLink hardware that they don't need it for this ROI check.
-    el_fix_x = fix_pos[0]
-    el_fix_y = -fix_pos[1]  # PsychoPy y-axis is flipped vs EyeLink
+    # Fixed EyeLink top-left-origin target for the ROI check (gaze samples
+    # are reported in this coordinate system -- confirmed from live gaze
+    # logs: raw gaze_pos clustered right around here when looking at the
+    # cross).
+    el_fix_x = SCREEN_WIDTH / 2                            # = 960
+    el_fix_y = SCREEN_HEIGHT - FIX_MARGIN_ABOVE_BOTTOM_PIX  # = 1080 - 120 = 960
     fixation_tolerance_pix = FORCED_FIXATION_TOLERANCE_PIX
 
     clk = core.Clock(); clk.reset()
@@ -939,7 +937,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 # ==============================================================================
 
 def _show_practice_intro(win, practice_faces):
-    _fix_small_pos = (0, -(win.size[1] / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # matches run_trial
+    _fix_small_pos = (0, -(SCREEN_HEIGHT / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # matches run_trial
     fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
     fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
                                      size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX,
