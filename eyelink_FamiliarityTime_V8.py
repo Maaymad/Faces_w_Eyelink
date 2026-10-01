@@ -246,6 +246,13 @@ PRACTICE_TOTAL_TRIALS  = 5
 MAX_PRACTICE_SESSIONS  = 2
 N_EXPERIMENTAL_TRIALS  = 32
 
+# Practice-trial coaching feedback thresholds (seconds). These only affect
+# what feedback message is shown after a practice trial -- they don't change
+# REPRODUCTION_TIMEOUT (the 10s hard cutoff after which no data is saved,
+# which still applies to both practice and real trials).
+PRACTICE_SLOW_RESPONSE_SEC  = 5.0  # "fail" feedback: respond slower than this
+PRACTICE_ERROR_FEEDBACK_SEC = 2.0  # "could do better" feedback: off by more than this
+
 # Face stimulus size in visual angle
 FACE_WIDTH_DEG  = 16.35
 FACE_HEIGHT_DEG = 10.22
@@ -1058,6 +1065,12 @@ def _show_post_practice_screen(win):
     wait_for_keys_or_exit(['space'])
 
 
+def _show_practice_trial_feedback(win, text):
+    draw_all_centered_multiline_text(win, text, height=30, wrapWidth=1000)
+    win.flip()
+    wait_for_keys_or_exit(['space'])
+
+
 def run_practice(el_tracker, win, practice_faces):
     _show_practice_intro(win, practice_faces)
     session_count = 0
@@ -1086,6 +1099,24 @@ def run_practice(el_tracker, win, practice_faces):
                 break
             if td is not None:
                 completed_count += 1
+                rt = td['reproduced_duration_s']
+                error_s = abs(td['reproduction_error_s'])
+                if rt > PRACTICE_SLOW_RESPONSE_SEC:
+                    _show_practice_trial_feedback(
+                        win,
+                        "Too slow!\n\n"
+                        "Your task is to match the duration of the large cross to "
+                        "the duration of the face you just saw. Press the SPACE bar "
+                        "when you think the same amount of time has passed.\n\n"
+                        "Press ENTER to continue.")
+                elif error_s > PRACTICE_ERROR_FEEDBACK_SEC:
+                    _show_practice_trial_feedback(
+                        win,
+                        "You could do better!\n\nTry to match the duration of the "
+                        "large cross more closely to the face you saw.\n\n"
+                        "Press ENTER to continue.")
+            # td is None: the 10s no-response reminder inside run_trial already
+            # covers the "failed to respond" case -- no extra feedback needed here.
 
         if completed_count >= PRACTICE_MIN_CORRECT:
             _show_post_practice_screen(win)
