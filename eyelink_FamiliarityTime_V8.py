@@ -184,7 +184,7 @@ FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge
 # bottom edge, outside the HV9 calibration's best-covered area) -- not
 # random noise, a systematic bias. 80px covers the observed max (~64px)
 # with margin.
-FORCED_FIXATION_TOLERANCE_PIX  = 80
+FORCED_FIXATION_TOLERANCE_PIX  = 100
 
 # Practice demo cross (shown in tutorial screens only) -- mirrors the real
 # reproduction cue exactly, so derive from the same constants rather than
