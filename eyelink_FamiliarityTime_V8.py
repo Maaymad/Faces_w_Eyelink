@@ -179,7 +179,12 @@ FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (wa
 # within FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
 FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge of the screen
-FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX  # ROI radius; diameter = 2x the cross's size
+# Live gaze logs (after fixing the coordinate conversion) showed a
+# consistent ~40-65px calibration offset at this screen position (near the
+# bottom edge, outside the HV9 calibration's best-covered area) -- not
+# random noise, a systematic bias. 80px covers the observed max (~64px)
+# with margin.
+FORCED_FIXATION_TOLERANCE_PIX  = 80
 
 # Practice demo cross (shown in tutorial screens only) -- mirrors the real
 # reproduction cue exactly, so derive from the same constants rather than
@@ -831,7 +836,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
             print(f"[DEBUG FIX] sample={'None' if sample is None else 'ok'} "
                   f"gaze_pos={gaze_pos} target=({el_fix_x:.1f},{el_fix_y:.1f}) "
                   f"dist={'n/a' if gaze_pos is None else f'{dist:.1f}'} "
-                  f"tolerance={fixation_tolerance_pix:.1f} inside={inside}")
+                  f"tolerance={fixation_tolerance_pix:.1f} inside={inside} "
+                  f"win.size={win.size} (assumed {SCREEN_WIDTH}x{SCREEN_HEIGHT})")
 
         if inside:
             if gaze_inside_start is None:
