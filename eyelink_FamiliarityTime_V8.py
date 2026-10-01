@@ -660,13 +660,17 @@ def _classify_face(face_path):
     """
     Return the face's nationality, classified from the image filename prefix.
 
-    Filenames are expected to look like IL_F_12.jpeg or UK_M_02.jpeg.
+    Filenames are expected to look like IL_F_12.jpeg, UK_M_02.jpeg, or
+    (for the neutral stimuli added to experimental_faces/) N_F_01.jpeg /
+    N_M_01.jpeg.
     """
     fname = os.path.basename(face_path).upper()
     if fname.startswith('IL'):
         return 'israeli'
     elif fname.startswith('UK'):
         return 'uk'
+    elif fname.startswith('N_'):
+        return 'neutral'
     else:
         return 'unknown'
 
