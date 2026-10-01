@@ -160,6 +160,10 @@ POST_FACE_FIX_DURATION = 0.500  # gray fixation cross after face, before reprodu
 ITI_DURATION           = 0.500  # blank ITI after SPACE press
 REPRODUCTION_KEY       = 'space'
 
+# Experiment background color (window default and every reset-to-background
+# point throughout the experiment)
+BACKGROUND_COLOR        = (0, 0, 0)  # neutral 50% gray
+
 # Fixation cross visual params
 FIX_SIZE_PIX            = 30
 FIX_LINE_WIDTH_PIX      = 4
@@ -888,7 +892,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         if repro_clk.getTime() > REPRODUCTION_TIMEOUT:
             el_tracker.stopRecording()
             el_tracker.sendMessage("REPRODUCTION_TIMEOUT")
-            win.color = (-1, -1, -1)
+            win.color = BACKGROUND_COLOR
             safe_flip(win)
             reminder_lines = draw_centered_multiline_text(
                 win,
@@ -899,7 +903,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
             safe_flip(win)
             event.clearEvents()
             event.waitKeys(keyList=['space', 'return'])
-            win.color = (-1, -1, -1)
+            win.color = BACKGROUND_COLOR
             safe_flip(win)
             return None  # no data recorded for this trial
         _draw_fix(fix_repro)
@@ -1756,7 +1760,7 @@ def main():
         fullscr=use_fullscreen,
         screen=0,
         allowGUI=True,          # required for EyeLinkCoreGraphicsPsychoPy
-        color=[-1, -1, -1],
+        color=list(BACKGROUND_COLOR),
         units='pix',
     )
     if monitor_name is not None:
@@ -1857,7 +1861,7 @@ def main():
 
         # --- Mid-task attention message after trial 30 (with optional recalibration) ---
         if trial_num == 30:
-            win.color = (-1, -1, -1)
+            win.color = BACKGROUND_COLOR
             safe_flip(win)
             while True:
                 msg_lines = draw_centered_multiline_text(
@@ -1874,7 +1878,7 @@ def main():
                     run_calibration(el_tracker, win)
                     continue  # show this screen again so SPACE is still needed to resume
                 break
-            win.color = (-1, -1, -1)
+            win.color = BACKGROUND_COLOR
             safe_flip(win)
 
         check_for_exit()
