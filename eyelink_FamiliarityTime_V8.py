@@ -171,11 +171,14 @@ FIX_COLOR_REPRODUCTION       = (1, 1, 1)   # white -- maximum contrast on black 
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (was same as gray)
 
-# Pre-face fixation cross sits below screen center, at a fixed pixel offset
-# (not dependent on the current image's height, so its position is identical
-# on every trial). Gaze must land within FORCED_FIXATION_TOLERANCE_PIX of the
-# cross continuously for PRE_FACE_FIX_DURATION before the face is shown.
-FIX_BELOW_IMAGE_GAP_PIX        = 80   # fixed pixel offset below screen center (was 60-100 range)
+# Pre-face fixation cross sits near the bottom of the screen, at a fixed
+# pixel margin above the bottom edge (not dependent on the current image's
+# height, so its position is identical on every trial, and clearly away from
+# the screen center where calibration accuracy is best -- intentional, to
+# keep the forced fixation a genuine, non-trivial check). Gaze must land
+# within FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
+# PRE_FACE_FIX_DURATION before the face is shown.
+FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge of the screen
 FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX  # ROI radius; diameter = 2x the cross's size
 
 # Practice demo cross (shown in tutorial screens only) -- mirrors the real
@@ -723,7 +726,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     else:
         face_size = (face_width_pix, face_height_pix)
     face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
-    fix_pos    = (0, -FIX_BELOW_IMAGE_GAP_PIX)  # fixed offset below screen center, every trial
+    fix_pos    = (0, -(win.size[1] / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # fixed, every trial
     fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY, pos=fix_pos)  # pre-face, gaze-contingent
     fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
@@ -922,7 +925,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 # ==============================================================================
 
 def _show_practice_intro(win, practice_faces):
-    _fix_small_pos = (0, -FIX_BELOW_IMAGE_GAP_PIX)  # matches run_trial
+    _fix_small_pos = (0, -(win.size[1] / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # matches run_trial
     fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
     fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
                                      size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX,
@@ -991,7 +994,7 @@ def _show_practice_intro(win, practice_faces):
          (" - once your gaze is detected on it,", False)], y=170, height=26)
     _line("a face will appear above it.", y=135, height=26).draw()
     _draw_fix(fix_small)
-    _footer(pos=(0, _fix_small_pos[1] - 90)).draw()
+    _footer(pos=(0, -300)).draw()  # fixed position -- the cross now sits too low to anchor off of
     win.flip()
     wait_for_keys_or_exit(['space'])
 
