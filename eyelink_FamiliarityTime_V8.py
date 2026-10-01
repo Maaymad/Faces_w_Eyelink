@@ -16,12 +16,12 @@ V8 changes vs V7:
     while blocked inside pylink calls like doTrackerSetup(), where the
     normal Shift+Q check_for_exit() cannot run because control has passed
     to SR Research's own event loop.
-  - Pre-face fixation cross moved to sit below the face image location, and
-    the pre-face fixation period is now gaze-contingent: the participant
-    must hold gaze on the cross (within FORCED_FIXATION_TOLERANCE_DEG)
-    continuously for PRE_FACE_FIX_DURATION before the face appears, instead
-    of a blind timed wait. Falls back to a timed wait in DEBUG_MODE, where
-    no real gaze samples are available.
+  - Pre-face fixation cross moved to sit at a fixed offset below screen
+    center, and the pre-face fixation period is now gaze-contingent: the
+    participant must hold gaze on the cross (within
+    FORCED_FIXATION_TOLERANCE_PIX) continuously for PRE_FACE_FIX_DURATION
+    before the face appears, instead of a blind timed wait. Falls back to a
+    timed wait in DEBUG_MODE, where no real gaze samples are available.
 """
 
 import pylink
@@ -171,11 +171,12 @@ FIX_COLOR_REPRODUCTION       = (1, 1, 1)   # white -- maximum contrast on black 
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (was same as gray)
 
-# Pre-face fixation cross is placed below the face image location. Gaze must
-# land within FORCED_FIXATION_TOLERANCE_DEG of the cross continuously for
-# PRE_FACE_FIX_DURATION before the face is shown.
-FIX_BELOW_IMAGE_GAP_PIX        = 40   # gap (pixels) between bottom of face image and the cross
-FORCED_FIXATION_TOLERANCE_DEG  = 2.0  # radius (degrees) of the gaze-contingent fixation window
+# Pre-face fixation cross sits below screen center, at a fixed pixel offset
+# (not dependent on the current image's height, so its position is identical
+# on every trial). Gaze must land within FORCED_FIXATION_TOLERANCE_PIX of the
+# cross continuously for PRE_FACE_FIX_DURATION before the face is shown.
+FIX_BELOW_IMAGE_GAP_PIX        = 80   # fixed pixel offset below screen center (was 60-100 range)
+FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX  # ROI radius; diameter = 2x the cross's size
 
 # Practice demo cross (shown in tutorial screens only) -- mirrors the real
 # reproduction cue exactly, so derive from the same constants rather than
@@ -722,7 +723,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     else:
         face_size = (face_width_pix, face_height_pix)
     face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
-    fix_pos    = (0, -(face_size[1] / 2) - FIX_BELOW_IMAGE_GAP_PIX)  # below the face location
+    fix_pos    = (0, -FIX_BELOW_IMAGE_GAP_PIX)  # fixed offset below screen center, every trial
     fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY, pos=fix_pos)  # pre-face, gaze-contingent
     fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
@@ -745,18 +746,19 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         return None
     core.wait(0.1)
 
-    # ===== (a) Pre-face gray fixation (gaze-contingent, below face location) =====
+    # ===== (a) Pre-face gray fixation (gaze-contingent, below screen center) =====
     # The cross sits below where the face will appear. Gaze must stay within
-    # FORCED_FIXATION_TOLERANCE_DEG of the cross continuously for
+    # FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
     # PRE_FACE_FIX_DURATION before the face is shown. In DEBUG_MODE, el_tracker
     # is a DummyEyeLink whose getNewestSample() always returns None, so this
     # falls back to a plain timed wait -- the experiment stays runnable
     # without real tracker hardware connected.
-    scn_w, scn_h = win.size
-    el_fix_x = scn_w / 2 + fix_pos[0]
-    el_fix_y = scn_h / 2 - fix_pos[1]  # PsychoPy y-axis is flipped vs EyeLink
-    fixation_tolerance_pix = degrees_to_pixels(
-        FORCED_FIXATION_TOLERANCE_DEG, MONITOR_DISTANCE, SCREEN_WIDTH_CM, SCREEN_WIDTH)
+    # NOTE: unlike drift_correct()/run_calibration(), no scn_w/2, scn_h/2
+    # recentering here -- confirmed against live gaze samples on the actual
+    # EyeLink hardware that they don't need it for this ROI check.
+    el_fix_x = fix_pos[0]
+    el_fix_y = -fix_pos[1]  # PsychoPy y-axis is flipped vs EyeLink
+    fixation_tolerance_pix = FORCED_FIXATION_TOLERANCE_PIX
 
     clk = core.Clock(); clk.reset()
     gaze_inside_start = None
@@ -920,8 +922,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 # ==============================================================================
 
 def _show_practice_intro(win, practice_faces):
-    _demo_face_w, _demo_face_h = calculate_face_size()
-    _fix_small_pos = (0, -(_demo_face_h / 2) - FIX_BELOW_IMAGE_GAP_PIX)  # matches run_trial
+    _fix_small_pos = (0, -FIX_BELOW_IMAGE_GAP_PIX)  # matches run_trial
     fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
     fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
                                      size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX,
