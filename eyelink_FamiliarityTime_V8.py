@@ -245,7 +245,9 @@ PRACTICE_MIN_CORRECT   = 3
 PRACTICE_TOTAL_TRIALS  = 5
 PRACTICE_EXTENDED_TRIALS = 8  # if feedback was given, extend the session up to this many trials
 MAX_PRACTICE_SESSIONS  = 2
-N_EXPERIMENTAL_TRIALS  = 32
+# N_EXPERIMENTAL_TRIALS removed: the number of experimental trials is now
+# derived at runtime from how many images are found in experimental_face_folder
+# (see main()), so every available face is used exactly once per session.
 
 # Practice-trial coaching feedback thresholds (seconds). These only affect
 # what feedback message is shown after a practice trial -- they don't change
@@ -1769,9 +1771,14 @@ def main():
     run_practice(el_tracker, win, practice_faces)
 
     # ----- Build trial list (balanced durations) -----
+    # Number of trials = number of images found in experimental_face_folder,
+    # so every available face is used exactly once per session.
+    n_experimental_trials = len(experimental_faces)
+    print(f"[DEBUG] {n_experimental_trials} experimental faces found -> "
+          f"{n_experimental_trials} trials this session.")
     faces_shuffled = list(experimental_faces)
     random.shuffle(faces_shuffled)
-    n = N_EXPERIMENTAL_TRIALS // 2
+    n = n_experimental_trials // 2
     trial_face_list = (
         [(face, FACE_DURATIONS[0]) for face in faces_shuffled[:n]] +
         [(face, FACE_DURATIONS[1]) for face in faces_shuffled[n:n*2]]
