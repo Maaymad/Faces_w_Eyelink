@@ -769,6 +769,22 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         win.flip()
         if event.getKeys(keyList=['escape']):
             el_tracker.stopRecording(); return None
+        if event.getKeys(keyList=['c']):
+            # Recalibrate mid-experiment. Safe here specifically because
+            # nothing has been measured for this trial yet (the face hasn't
+            # appeared) -- recalibration is NOT offered during face display
+            # or the reproduction response, since interrupting either would
+            # corrupt that trial's data.
+            el_tracker.stopRecording()
+            run_calibration(el_tracker, win)
+            error = el_tracker.startRecording(1, 1, 1, 1)
+            if error:
+                print("EyeLink recording error after recalibration")
+                return None
+            core.wait(0.1)
+            gaze_inside_start = None
+            el_tracker.sendMessage("PRE_FACE_FIX_ONSET")
+            continue
 
         if DEBUG_MODE:
             # No live gaze samples available -- just wait the required duration.
