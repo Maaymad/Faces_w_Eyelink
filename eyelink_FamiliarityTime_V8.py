@@ -1817,19 +1817,25 @@ def main():
             os.fsync(behavioral_file.fileno())
             print(f"[DEBUG] Trial {trial_num} saved to disk.")
 
-        # --- Mid-task attention message after trial 30 ---
+        # --- Mid-task attention message after trial 30 (with optional recalibration) ---
         if trial_num == 30:
             win.color = (-1, -1, -1)
             safe_flip(win)
-            msg_lines = draw_centered_multiline_text(
-                win,
-                "You're doing great!\n\nYou've completed 30 trials.\nPlease stay focused.\n\nPress SPACE to continue.",
-                pos=(0, 0), height=36, color='white')
-            for s in msg_lines:
-                s.draw()
-            safe_flip(win)
-            event.clearEvents()
-            event.waitKeys(keyList=['space'])
+            while True:
+                msg_lines = draw_centered_multiline_text(
+                    win,
+                    "You're doing great!\n\nYou've completed 30 trials.\nPlease stay focused.\n\n"
+                    "Press C to recalibrate, or SPACE to continue.",
+                    pos=(0, 0), height=36, color='white')
+                for s in msg_lines:
+                    s.draw()
+                safe_flip(win)
+                event.clearEvents()
+                keys = event.waitKeys(keyList=['space', 'c'])
+                if 'c' in keys:
+                    run_calibration(el_tracker, win)
+                    continue  # show this screen again so SPACE is still needed to resume
+                break
             win.color = (-1, -1, -1)
             safe_flip(win)
 
