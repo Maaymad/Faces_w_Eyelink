@@ -1679,8 +1679,8 @@ def main():
     run_calibration(el_tracker, win)
 
     # ----- Load stimuli -----
-    practice_face_folder    = os.path.join(_script_dir, "practice_faces")
-    experimental_face_folder= os.path.join(_script_dir, "experimental_faces")
+    practice_face_folder    = os.path.join(_script_dir, "Stimuli", "practice_faces")
+    experimental_face_folder= os.path.join(_script_dir, "Stimuli", "experimental_faces")
 
     practice_faces = []
     if os.path.exists(practice_face_folder):
