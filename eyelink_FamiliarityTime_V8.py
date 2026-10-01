@@ -1083,10 +1083,13 @@ def run_practice(el_tracker, win, practice_faces):
             win.flip()
             wait_for_keys_or_exit(['space'])
 
-        practice_trials = [(face, dur)
-                           for face in practice_faces for dur in FACE_DURATIONS]
-        random.shuffle(practice_trials)
-        practice_trials = practice_trials[:PRACTICE_TOTAL_TRIALS]
+        # Each face is used at most once per practice session (previously every
+        # face x duration combo was listed before truncating, so the same face
+        # could be picked twice with different durations).
+        practice_faces_shuffled = list(practice_faces)
+        random.shuffle(practice_faces_shuffled)
+        selected_faces = practice_faces_shuffled[:PRACTICE_TOTAL_TRIALS]
+        practice_trials = [(face, random.choice(FACE_DURATIONS)) for face in selected_faces]
 
         completed_count = 0
         for trial_idx, (face_img, dur) in enumerate(practice_trials):
