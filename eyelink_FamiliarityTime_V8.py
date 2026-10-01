@@ -179,7 +179,10 @@ FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (wa
 # within FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
 FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge of the screen
-FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX  # ROI radius; diameter = 2x the cross's size
+# Radius 2x the cross's size (diameter = 4x) -- widened from 1x/diameter=2x
+# because gaze accuracy this close to the bottom edge is worse than near
+# screen center (likely outside the HV9 calibration's well-covered area).
+FORCED_FIXATION_TOLERANCE_PIX  = FIX_SIZE_PIX * 2
 
 # Practice demo cross (shown in tutorial screens only) -- mirrors the real
 # reproduction cue exactly, so derive from the same constants rather than
@@ -765,6 +768,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 
     clk = core.Clock(); clk.reset()
     gaze_inside_start = None
+    _last_debug_print = -999
     el_tracker.sendMessage("PRE_FACE_FIX_ONSET")
     while True:
         check_for_exit()
@@ -820,6 +824,16 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         if gaze_pos is not None:
             dist = ((gaze_pos[0] - el_fix_x) ** 2 + (gaze_pos[1] - el_fix_y) ** 2) ** 0.5
             inside = dist <= fixation_tolerance_pix
+
+        # Throttled diagnostic print (twice a second) -- shows exactly what
+        # the tracker is reporting vs. what we're comparing it against, to
+        # debug gaze-matching issues directly from the console.
+        if clk.getTime() - _last_debug_print > 0.5:
+            _last_debug_print = clk.getTime()
+            print(f"[DEBUG FIX] sample={'None' if sample is None else 'ok'} "
+                  f"gaze_pos={gaze_pos} target=({el_fix_x:.1f},{el_fix_y:.1f}) "
+                  f"dist={'n/a' if gaze_pos is None else f'{dist:.1f}'} "
+                  f"tolerance={fixation_tolerance_pix:.1f} inside={inside}")
 
         if inside:
             if gaze_inside_start is None:
