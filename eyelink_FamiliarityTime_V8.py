@@ -164,8 +164,12 @@ REPRODUCTION_KEY       = 'space'
 FIX_SIZE_PIX            = 30
 FIX_LINE_WIDTH_PIX      = 4
 FIX_COLOR_GRAY          = (0.3, 0.3, 0.3)
-FIX_COLOR_REPRODUCTION  = (1, 1, 1)      # white — visible on black background
-FIX_SIZE_REPRODUCTION_PIX = 40
+# Reproduction cue: made strongly distinct from the small gray ISI cross via a
+# large size jump and a much thicker line -- the previous size/color bump
+# (30->40px, gray->white) was not salient enough as a "start now" cue.
+FIX_COLOR_REPRODUCTION       = (1, 1, 1)   # white -- maximum contrast on black background
+FIX_SIZE_REPRODUCTION_PIX    = 90          # 3x the small cross (was 40, ~1.3x)
+FIX_LINE_WIDTH_REPRODUCTION_PIX = 8        # 2x the small cross's line width (was same as gray)
 
 # Pre-face fixation cross is placed below the face image location. Gaze must
 # land within FORCED_FIXATION_TOLERANCE_DEG of the cross continuously for
@@ -173,9 +177,12 @@ FIX_SIZE_REPRODUCTION_PIX = 40
 FIX_BELOW_IMAGE_GAP_PIX        = 40   # gap (pixels) between bottom of face image and the cross
 FORCED_FIXATION_TOLERANCE_DEG  = 2.0  # radius (degrees) of the gaze-contingent fixation window
 
-# Practice demo cross (shown in tutorial screens only)
-PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX = FIX_SIZE_REPRODUCTION_PIX
-PRACTICE_DEMO_LARGE_CROSS_COLOR    = (1, 1, 1)
+# Practice demo cross (shown in tutorial screens only) -- mirrors the real
+# reproduction cue exactly, so derive from the same constants rather than
+# duplicating them (avoids the two drifting apart).
+PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX       = FIX_SIZE_REPRODUCTION_PIX
+PRACTICE_DEMO_LARGE_CROSS_LINE_WIDTH_PIX = FIX_LINE_WIDTH_REPRODUCTION_PIX
+PRACTICE_DEMO_LARGE_CROSS_COLOR          = FIX_COLOR_REPRODUCTION
 
 # Tutorial font
 _PSYCHOPY_FONT_DIR = os.path.join(
@@ -683,7 +690,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
               is_practice=False):
     """
     Single trial: gaze-contingent gray fix (below face location) → face →
-    gray fix (ISI) → white fix (reproduction) → ITI.
+    gray fix (ISI) → large white fix (reproduction) → ITI.
 
     Returns trial_data dict, None on escape/abort, or 'SKIP' on Shift+S.
     """
@@ -709,7 +716,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY, pos=fix_pos)  # pre-face, gaze-contingent
     fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
-                                 size_pix=FIX_SIZE_REPRODUCTION_PIX)
+                                 size_pix=FIX_SIZE_REPRODUCTION_PIX,
+                                 line_width_pix=FIX_LINE_WIDTH_REPRODUCTION_PIX)
 
     face_nationality = _classify_face(face_image)
 
@@ -890,7 +898,8 @@ def _show_practice_intro(win, practice_faces):
     _fix_small_pos = (0, -(_demo_face_h / 2) - FIX_BELOW_IMAGE_GAP_PIX)  # matches run_trial
     fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
     fix_large_demo = _make_fix_cross(win, PRACTICE_DEMO_LARGE_CROSS_COLOR,
-                                     size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX)
+                                     size_pix=PRACTICE_DEMO_LARGE_CROSS_SIZE_PIX,
+                                     line_width_pix=PRACTICE_DEMO_LARGE_CROSS_LINE_WIDTH_PIX)
 
     class _MultiLineCentered:
         """Draws each line of a multi-line string as its own centered
