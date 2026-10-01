@@ -1890,15 +1890,18 @@ def main():
             os.fsync(behavioral_file.fileno())
             print(f"[DEBUG] Trial {trial_num} saved to disk.")
 
-        # --- Mid-task attention message after trial 30 (with optional recalibration) ---
-        if trial_num == 30:
+        # --- Mid-task attention message after trial 45 -----------------------
+        # 'c' still silently triggers recalibration here (undocumented in the
+        # on-screen text -- the experimenter already knows about it), SPACE
+        # is the only thing participants are told about.
+        if trial_num == 45:
             win.color = BACKGROUND_COLOR
             safe_flip(win)
             while True:
                 msg_lines = draw_centered_multiline_text(
                     win,
-                    "You're doing great!\n\nYou've completed 30 trials.\nPlease stay focused.\n\n"
-                    "Press C to recalibrate, or SPACE to continue.",
+                    "You're doing great!\n\nYou've reached the halfway point.\nPlease stay focused.\n\n"
+                    "Press SPACE to continue.",
                     pos=(0, 0), height=36, color='white')
                 for s in msg_lines:
                     s.draw()
