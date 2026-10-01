@@ -243,6 +243,7 @@ _Slider_orig.__init__ = _slider_compat_init
 FIXATION_TOLERANCE     = 1.0   # degrees for drift correction tolerance
 PRACTICE_MIN_CORRECT   = 3
 PRACTICE_TOTAL_TRIALS  = 5
+PRACTICE_EXTENDED_TRIALS = 8  # if feedback was given, extend the session up to this many trials
 MAX_PRACTICE_SESSIONS  = 2
 N_EXPERIMENTAL_TRIALS  = 32
 
@@ -1085,14 +1086,22 @@ def run_practice(el_tracker, win, practice_faces):
 
         # Each face is used at most once per practice session (previously every
         # face x duration combo was listed before truncating, so the same face
-        # could be picked twice with different durations).
+        # could be picked twice with different durations). If the participant
+        # gets feedback (too slow or inaccurate) during the first
+        # PRACTICE_TOTAL_TRIALS trials, the session extends up to
+        # PRACTICE_EXTENDED_TRIALS using the remaining unused faces, so they
+        # get more practice before the pass/fail check.
         practice_faces_shuffled = list(practice_faces)
         random.shuffle(practice_faces_shuffled)
-        selected_faces = practice_faces_shuffled[:PRACTICE_TOTAL_TRIALS]
+        max_trials = min(len(practice_faces_shuffled), PRACTICE_EXTENDED_TRIALS)
+        selected_faces = practice_faces_shuffled[:max_trials]
         practice_trials = [(face, random.choice(FACE_DURATIONS)) for face in selected_faces]
 
         completed_count = 0
+        feedback_given = False
         for trial_idx, (face_img, dur) in enumerate(practice_trials):
+            if trial_idx >= PRACTICE_TOTAL_TRIALS and not feedback_given:
+                break  # no feedback in the first PRACTICE_TOTAL_TRIALS -- no need to extend
             td = run_trial(el_tracker, win,
                            trial_num=f"practice_{session_count}_{trial_idx}",
                            face_image=face_img, face_duration_s=dur,
@@ -1105,6 +1114,7 @@ def run_practice(el_tracker, win, practice_faces):
                 rt = td['reproduced_duration_s']
                 error_s = abs(td['reproduction_error_s'])
                 if rt > PRACTICE_SLOW_RESPONSE_SEC:
+                    feedback_given = True
                     _show_practice_trial_feedback(
                         win,
                         "Too slow!\n\n"
@@ -1113,6 +1123,7 @@ def run_practice(el_tracker, win, practice_faces):
                         "when you think the same amount of time has passed.\n\n"
                         "Press ENTER to continue.")
                 elif error_s > PRACTICE_ERROR_FEEDBACK_SEC:
+                    feedback_given = True
                     _show_practice_trial_feedback(
                         win,
                         "You could do better!\n\nTry to match the duration of the "
