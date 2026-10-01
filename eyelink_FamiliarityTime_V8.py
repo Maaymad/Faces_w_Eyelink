@@ -167,11 +167,11 @@ BACKGROUND_COLOR        = (0, 0, 0)  # neutral 50% gray
 # Fixation cross visual params
 FIX_SIZE_PIX            = 30
 FIX_LINE_WIDTH_PIX      = 4
-FIX_COLOR_GRAY          = (-0.2, -0.2, -0.2)
+FIX_COLOR_GRAY          = (0.5, 0.5, 0.5)
 # Reproduction cue: made strongly distinct from the small gray ISI cross via a
 # large size jump and a much thicker line -- the previous size/color bump
 # (30->40px, gray->white) was not salient enough as a "start now" cue.
-FIX_COLOR_REPRODUCTION       = (1, 1, 1)   # white -- maximum contrast on black background
+FIX_COLOR_REPRODUCTION       = (-1, -1, -1)  # black -- strong contrast on gray background
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (was same as gray)
 
