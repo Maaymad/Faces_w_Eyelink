@@ -494,7 +494,12 @@ def run_calibration(el_tracker, win):
     print("[DEBUG] openGraphicsEx called")
 
     # Calibration target appearance
-    genv.setCalibrationColors('white', 'black')
+    # NOTE: setCalibrationColors() sets win.color as a side effect (it
+    # assigns background_color directly to win.color internally) -- use
+    # BACKGROUND_COLOR here, not a hardcoded 'black', or every calibration
+    # (including mid-experiment recalibration via 'c') silently resets the
+    # experiment background back to black.
+    genv.setCalibrationColors('white', BACKGROUND_COLOR)
     genv.setTargetType('circle')
     genv.setTargetSize(24)
 
