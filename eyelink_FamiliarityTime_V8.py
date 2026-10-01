@@ -1721,6 +1721,8 @@ def main():
     os.makedirs(data_dir, exist_ok=True)
 
     edf_fname = f"{exp_info['Participant ID'][:4]}{exp_info['Session']}.edf"
+    local_edf = os.path.join(
+        data_dir, f"{exp_info['Participant ID']}_{exp_info['Session']}.edf")
 
     from datetime import datetime
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1773,6 +1775,41 @@ def main():
 
     # ----- EyeLink -----
     el_tracker = setup_eyelink(win, edf_fname)
+
+    # Safety net: if the program exits abnormally (e.g. Shift+Q at any point,
+    # including mid-trial) before the normal end-of-experiment cleanup below
+    # runs, the EDF file would otherwise never be closed or transferred off
+    # the Host PC -- losing all eye-tracking data for the session even though
+    # the behavioral CSV (written trial-by-trial) survives. This always runs
+    # at process exit and is a no-op if the normal cleanup already finished.
+    _edf_finalized = {'done': False}
+
+    def _finalize_edf():
+        if _edf_finalized['done']:
+            return
+        print("[DEBUG] Finalizing EDF (close + transfer) on exit...")
+        try:
+            el_tracker.setOfflineMode()
+            core.wait(0.1)
+        except Exception as e:
+            print(f"[DEBUG] setOfflineMode on exit: {e}")
+        try:
+            el_tracker.closeDataFile()
+        except Exception as e:
+            print(f"[DEBUG] closeDataFile on exit (may already be closed): {e}")
+        try:
+            el_tracker.receiveDataFile(edf_fname, local_edf)
+            print(f"EDF saved: {local_edf}")
+            _edf_finalized['done'] = True
+        except Exception as e:
+            print(f"[WARNING] EDF transfer error on exit: {e}")
+        try:
+            el_tracker.close()
+        except Exception:
+            pass
+
+    atexit.register(_finalize_edf)
+
     run_calibration(el_tracker, win)
 
     # ----- Load stimuli -----
@@ -1946,12 +1983,10 @@ def main():
         print(f"Post-task data saved: {post_fname}")
 
     # ----- Transfer EDF -----
-    local_edf = os.path.join(
-        data_dir,
-        f"{exp_info['Participant ID']}_{exp_info['Session']}.edf")
     try:
         el_tracker.receiveDataFile(edf_fname, local_edf)
         print(f"EDF saved: {local_edf}")
+        _edf_finalized['done'] = True  # atexit fallback becomes a no-op
     except RuntimeError as error:
         print(f"EDF transfer error: {error}")
 
