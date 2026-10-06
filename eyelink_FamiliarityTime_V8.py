@@ -262,9 +262,13 @@ MAX_PRACTICE_SESSIONS  = 2
 PRACTICE_SLOW_RESPONSE_SEC  = 5.0  # "fail" feedback: respond slower than this
 PRACTICE_ERROR_FEEDBACK_SEC = 2.0  # "could do better" feedback: off by more than this
 
-# Face stimulus size in visual angle
-FACE_WIDTH_DEG  = 16.35
-FACE_HEIGHT_DEG = 10.22
+# Face stimulus size in visual angle.
+# Matched to the Gorilla version of the task: on a 14" MacBook Pro
+# (1512 x 982, ~30.2 cm wide) the 400x400 image is shown ~371 px wide
+# (~24.6% of screen width) = ~7.43 cm, i.e. ~7.09 deg at 60 cm.
+# Height follows the image aspect ratio (square images -> same as width).
+FACE_WIDTH_DEG  = 7.09
+FACE_HEIGHT_DEG = 7.09
 DOT_RADIUS      = 10   # pixels (unused in main task, kept for legacy)
 
 
