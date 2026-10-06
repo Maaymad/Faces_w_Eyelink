@@ -168,6 +168,7 @@ BACKGROUND_COLOR        = (0, 0, 0)  # neutral 50% gray
 FIX_SIZE_PIX            = 30
 FIX_LINE_WIDTH_PIX      = 4
 FIX_COLOR_GRAY          = (0.5, 0.5, 0.5)
+FIX_COLOR_FORCED        = (-1, -1, -1)  # black pre-face (forced fixation) cross
 # Reproduction cue: made strongly distinct from the small gray ISI cross via a
 # large size jump and a much thicker line -- the previous size/color bump
 # (30->40px, gray->white) was not salient enough as a "start now" cue.
@@ -175,14 +176,12 @@ FIX_COLOR_REPRODUCTION       = (-1, -1, -1)  # black -- strong contrast on gray 
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (was same as gray)
 
-# Pre-face fixation cross sits near the bottom of the screen, at a fixed
-# pixel margin above the bottom edge (not dependent on the current image's
-# height, so its position is identical on every trial, and clearly away from
-# the screen center where calibration accuracy is best -- intentional, to
-# keep the forced fixation a genuine, non-trivial check). Gaze must land
-# within FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
+# Pre-face fixation cross sits just below where the face will appear, a
+# fixed gap below the image's bottom edge (face size is the same on every
+# trial, so the position is too). Gaze must land within
+# FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
-FIX_MARGIN_ABOVE_BOTTOM_PIX    = 120  # fixed pixel margin above the bottom edge of the screen
+FIX_GAP_BELOW_FACE_PIX         = 60   # px from the image's bottom edge to the cross center
 # Live gaze logs (after fixing the coordinate conversion) showed a
 # consistent ~40-65px calibration offset at this screen position (near the
 # bottom edge, outside the HV9 calibration's best-covered area) -- not
@@ -373,6 +372,13 @@ def calculate_face_size():
     w = degrees_to_pixels(FACE_WIDTH_DEG,  MONITOR_DISTANCE, SCREEN_WIDTH_CM,  SCREEN_WIDTH)
     h = degrees_to_pixels(FACE_HEIGHT_DEG, MONITOR_DISTANCE, SCREEN_WIDTH_CM,  SCREEN_WIDTH)
     return (int(w), int(h))
+
+
+def forced_fix_offset_pix():
+    """Distance (px) from screen center down to the pre-face fixation cross.
+    Uses the face width as its height (stimuli are square images)."""
+    face_w, _ = calculate_face_size()
+    return face_w / 2 + FIX_GAP_BELOW_FACE_PIX
 
 
 def verify_display_parameters():
@@ -737,8 +743,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     else:
         face_size = (face_width_pix, face_height_pix)
     face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
-    fix_pos    = (0, -(SCREEN_HEIGHT / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # fixed, every trial
-    fix_gray   = _make_fix_cross(win, FIX_COLOR_GRAY, pos=fix_pos)  # pre-face, gaze-contingent
+    fix_pos    = (0, -forced_fix_offset_pix())  # just below the face, fixed every trial
+    fix_gray   = _make_fix_cross(win, FIX_COLOR_FORCED, pos=fix_pos)  # pre-face, gaze-contingent
     fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
                                  size_pix=FIX_SIZE_REPRODUCTION_PIX,
@@ -760,7 +766,7 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         return None
     core.wait(0.1)
 
-    # ===== (a) Pre-face gray fixation (gaze-contingent, below screen center) =====
+    # ===== (a) Pre-face black fixation (gaze-contingent, just below the face) =====
     # The cross sits below where the face will appear. Gaze must stay within
     # FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
     # PRE_FACE_FIX_DURATION before the face is shown. In DEBUG_MODE, el_tracker
@@ -771,8 +777,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
     # are reported in this coordinate system -- confirmed from live gaze
     # logs: raw gaze_pos clustered right around here when looking at the
     # cross).
-    el_fix_x = SCREEN_WIDTH / 2                            # = 960
-    el_fix_y = SCREEN_HEIGHT - FIX_MARGIN_ABOVE_BOTTOM_PIX  # = 1080 - 120 = 960
+    el_fix_x = SCREEN_WIDTH / 2                             # = 960
+    el_fix_y = SCREEN_HEIGHT / 2 + forced_fix_offset_pix()  # below center (y grows down)
     fixation_tolerance_pix = FORCED_FIXATION_TOLERANCE_PIX
 
     clk = core.Clock(); clk.reset()
@@ -949,8 +955,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 # ==============================================================================
 
 def _show_practice_intro(win, practice_faces):
-    _fix_small_pos = (0, -(SCREEN_HEIGHT / 2) + FIX_MARGIN_ABOVE_BOTTOM_PIX)  # matches run_trial
-    fix_small      = _make_fix_cross(win, FIX_COLOR_GRAY, pos=_fix_small_pos)
+    _fix_small_pos = (0, -forced_fix_offset_pix())  # matches run_trial
+    fix_small      = _make_fix_cross(win, FIX_COLOR_FORCED, pos=_fix_small_pos)
 
     class _MultiLineCentered:
         """Draws each line of a multi-line string as its own centered
