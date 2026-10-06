@@ -169,12 +169,13 @@ FIX_SIZE_PIX            = 30
 FIX_LINE_WIDTH_PIX      = 4
 FIX_COLOR_GRAY          = (0.5, 0.5, 0.5)
 FIX_COLOR_FORCED        = (-1, -1, -1)  # black pre-face (forced fixation) cross
+FIX_LINE_WIDTH_FORCED_PIX = 6           # thicker than the gray ISI cross
 # Reproduction cue: made strongly distinct from the small gray ISI cross via a
 # large size jump and a much thicker line -- the previous size/color bump
 # (30->40px, gray->white) was not salient enough as a "start now" cue.
 FIX_COLOR_REPRODUCTION       = (-1, -1, -1)  # black -- strong contrast on gray background
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
-FIX_LINE_WIDTH_REPRODUCTION_PIX = 6        # 2x the small cross's line width (was same as gray)
+FIX_LINE_WIDTH_REPRODUCTION_PIX = 9        # thicker than the forced-fixation cross (was 6)
 
 # Pre-face fixation cross sits just below where the face will appear, a
 # fixed gap below the image's bottom edge (face size is the same on every
@@ -744,7 +745,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         face_size = (face_width_pix, face_height_pix)
     face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
     fix_pos    = (0, -forced_fix_offset_pix())  # just below the face, fixed every trial
-    fix_gray   = _make_fix_cross(win, FIX_COLOR_FORCED, pos=fix_pos)  # pre-face, gaze-contingent
+    fix_gray   = _make_fix_cross(win, FIX_COLOR_FORCED, pos=fix_pos,  # pre-face, gaze-contingent
+                                 line_width_pix=FIX_LINE_WIDTH_FORCED_PIX)
     fix_gray_center = _make_fix_cross(win, FIX_COLOR_GRAY)  # post-face ISI, centered as before
     fix_repro  = _make_fix_cross(win, FIX_COLOR_REPRODUCTION,
                                  size_pix=FIX_SIZE_REPRODUCTION_PIX,
@@ -956,7 +958,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
 
 def _show_practice_intro(win, practice_faces):
     _fix_small_pos = (0, -forced_fix_offset_pix())  # matches run_trial
-    fix_small      = _make_fix_cross(win, FIX_COLOR_FORCED, pos=_fix_small_pos)
+    fix_small      = _make_fix_cross(win, FIX_COLOR_FORCED, pos=_fix_small_pos,
+                                     line_width_pix=FIX_LINE_WIDTH_FORCED_PIX)
 
     class _MultiLineCentered:
         """Draws each line of a multi-line string as its own centered
