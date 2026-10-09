@@ -179,12 +179,13 @@ FIX_COLOR_REPRODUCTION = (-1, -1, 1)    # blue
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 9        # thicker than the forced-fixation cross (was 6)
 
-# Pre-face fixation cross sits just below where the face will appear, a
-# fixed gap below the image's bottom edge (face size is the same on every
-# trial, so the position is too). Gaze must land within
+# Pre-face fixation cross sits at a fixed distance below the screen center,
+# independent of the stimulus images, so it is in the same place on every
+# trial (practice and main). 358 px is where it was with the 12 deg
+# 400x400 images (60 px below their bottom edge). Gaze must land within
 # FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
-FIX_GAP_BELOW_FACE_PIX         = 60   # px from the image's bottom edge to the cross center
+FORCED_FIX_BELOW_CENTER_PIX    = 358
 # Live gaze logs (after fixing the coordinate conversion) showed a
 # consistent ~40-65px calibration offset at this screen position (near the
 # bottom edge, outside the HV9 calibration's best-covered area) -- not
@@ -264,9 +265,12 @@ MAX_PRACTICE_SESSIONS  = 2
 PRACTICE_SLOW_RESPONSE_SEC  = 5.0  # "fail" feedback: respond slower than this
 PRACTICE_ERROR_FEEDBACK_SEC = 2.0  # "could do better" feedback: off by more than this
 
-# Experimental stimuli: background removed, then faces made the same size
-# and aligned (eyes at the same spot) by normalize_face_size.py combined.
+# Stimuli: background removed, then faces made the same size and aligned
+# (eyes at the same spot) by normalize_face_size.py combined. The practice
+# set was normalized with --match to the experimental set, so both share
+# the same face size, canvas and face position.
 EXPERIMENTAL_FACE_FOLDER_NAME = "experimental_faces_sizenorm_combined"
+PRACTICE_FACE_FOLDER_NAME     = "practice_faces_sizenorm_combined"
 
 # Face stimulus size in visual angle (width of the whole image).
 # Matched to the Gorilla version of the task: on a 14" MacBook Pro
@@ -280,13 +284,12 @@ EXPERIMENTAL_FACE_FOLDER_NAME = "experimental_faces_sizenorm_combined"
 FACE_WIDTH_DEG  = 13.56
 FACE_HEIGHT_DEG = 13.56
 
-# Shift, as a fraction of the displayed image size, that puts the center of
-# the face (halfway between the eyes and the chin) at the screen center
-# instead of the center of the image. Set in main() from layout.json in the
-# experimental stimulus folder (written by normalize_face_size.py) and used
-# only for images from that folder; (0, 0) = center the image.
-FACE_CENTER_SHIFT_FRAC = (0.0, 0.0)
-FACE_CENTER_SHIFT_DIR  = None
+# Per stimulus folder: shift, as a fraction of the displayed image size,
+# that puts the center of the face (halfway between the eyes and the chin)
+# at the screen center instead of the center of the image. Filled in main()
+# from each folder's layout.json (written by normalize_face_size.py);
+# images from other folders are centered as whole images.
+FACE_CENTER_SHIFTS = {}   # {absolute folder path: (x_frac, y_frac)}
 DOT_RADIUS      = 10   # pixels (unused in main task, kept for legacy)
 
 
@@ -412,20 +415,15 @@ def load_face_center_shift(folder):
 def face_pos(face_image, face_size):
     """Screen position for a face image of the given displayed size: the
     face itself is centered for normalized stimuli, the image otherwise."""
-    if os.path.dirname(os.path.abspath(face_image)) != FACE_CENTER_SHIFT_DIR:
-        return (0, 0)
-    sx, sy = FACE_CENTER_SHIFT_FRAC
+    folder = os.path.dirname(os.path.abspath(face_image))
+    sx, sy = FACE_CENTER_SHIFTS.get(folder, (0.0, 0.0))
     return (sx * face_size[0], sy * face_size[1])
 
 
 def forced_fix_offset_pix():
-    """Distance (px) from screen center down to the pre-face fixation cross:
-    FIX_GAP_BELOW_FACE_PIX below the bottom edge of the experimental image.
-    Uses the face width as its height (stimuli are square images). Same
-    position for practice and experimental trials."""
-    face_w, _ = calculate_face_size()
-    image_center_y = FACE_CENTER_SHIFT_FRAC[1] * face_w
-    return face_w / 2 - image_center_y + FIX_GAP_BELOW_FACE_PIX
+    """Distance (px) from screen center down to the pre-face fixation cross
+    (fixed; same for practice and experimental trials)."""
+    return FORCED_FIX_BELOW_CENTER_PIX
 
 
 def verify_display_parameters():
@@ -1087,7 +1085,7 @@ def _show_practice_intro(win, practice_faces):
         _w, _h = _tmp.size
         _demo_size = (face_width_pix, int(face_width_pix * (_h / _w))) \
             if _w > 0 and _h > 0 else (face_width_pix, face_height_pix)
-        _demo_pos = (0, 0)  # <-- same position as the real trial (run_trial uses pos=(0, 0))
+        _demo_pos = face_pos(practice_faces[0], _demo_size)  # same as the real trial
 
         # Caption directly above the demo image
         caption_y = _demo_pos[1] + _demo_size[1] / 2 + 40
@@ -1418,6 +1416,8 @@ def run_ratings(win, face_images, participant_id, session):
             sc = MAX_H / ih; iw = int(iw * sc); ih = MAX_H
         face_stim.image = face_path
         face_stim.size  = (iw, ih)
+        _dx, _dy = face_pos(face_path, (iw, ih))  # center the face itself
+        face_stim.pos   = (_dx, 250 + _dy)
         fam_slider.reset(); att_slider.reset()
         show_warning = False
 
@@ -1873,12 +1873,12 @@ def main():
     run_calibration(el_tracker, win)
 
     # ----- Load stimuli -----
-    practice_face_folder    = os.path.join(_script_dir, "Stimuli", "practice_faces")
+    practice_face_folder    = os.path.join(_script_dir, "Stimuli",
+                                           PRACTICE_FACE_FOLDER_NAME)
     experimental_face_folder= os.path.join(_script_dir, "Stimuli",
                                            EXPERIMENTAL_FACE_FOLDER_NAME)
-    global FACE_CENTER_SHIFT_FRAC, FACE_CENTER_SHIFT_DIR
-    FACE_CENTER_SHIFT_FRAC = load_face_center_shift(experimental_face_folder)
-    FACE_CENTER_SHIFT_DIR  = os.path.abspath(experimental_face_folder)
+    for _folder in (practice_face_folder, experimental_face_folder):
+        FACE_CENTER_SHIFTS[os.path.abspath(_folder)] = load_face_center_shift(_folder)
 
     practice_faces = []
     if os.path.exists(practice_face_folder):
@@ -1886,6 +1886,7 @@ def main():
             os.path.join(practice_face_folder, f)
             for f in os.listdir(practice_face_folder)
             if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))
+            and not f.startswith('face_size_')  # normalization contact sheet
         ]
     if not practice_faces:
         print(f"Warning: no practice faces found in '{practice_face_folder}'")

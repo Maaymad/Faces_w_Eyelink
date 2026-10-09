@@ -40,8 +40,17 @@ Run with venv311 (needs mediapipe and the model file in models/):
     venv311/bin/python normalize_face_size.py              # eye_chin
     venv311/bin/python normalize_face_size.py ipd          # or: combined
 Each measure writes to its own folder (see OUTPUT_DIR).
+
+To make another set (e.g. the practice faces) match an already-normalized
+set exactly -- same face size, canvas, eye position and face center -- use
+--match with that set's folder (its layout.json is used as the target):
+    venv311/bin/python normalize_face_size.py combined \
+        --input Stimuli/practice_faces_nobg \
+        --output Stimuli/practice_faces_sizenorm_combined \
+        --match Stimuli/experimental_faces_sizenorm_combined
 """
 
+import argparse
 import csv
 import json
 import os
@@ -55,16 +64,27 @@ from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
 MEASURES = ("eye_chin", "ipd", "combined")
-# Command-line argument overrides the default
-MEASURE = sys.argv[1] if len(sys.argv) > 1 else "eye_chin"
-if MEASURE not in MEASURES:
-    sys.exit(f"Unknown measure {MEASURE!r}; use one of {MEASURES}")
-
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(SCRIPT_DIR, "Stimuli", "experimental_faces_nobg")
-OUTPUT_DIR = os.path.join(
+
+_parser = argparse.ArgumentParser(description="Normalize face size.")
+_parser.add_argument("measure", nargs="?", default="eye_chin", choices=MEASURES)
+_parser.add_argument("--input", help="folder of background-removed PNGs")
+_parser.add_argument("--output", help="output folder")
+_parser.add_argument("--match", help="normalized folder whose layout.json to match")
+ARGS, _ = _parser.parse_known_args()
+MEASURE = ARGS.measure
+
+INPUT_DIR = ARGS.input or os.path.join(SCRIPT_DIR, "Stimuli", "experimental_faces_nobg")
+OUTPUT_DIR = ARGS.output or os.path.join(
     SCRIPT_DIR, "Stimuli",
     "experimental_faces_sizenorm" + ("" if MEASURE == "eye_chin" else f"_{MEASURE}"))
+MATCH_LAYOUT = None
+if ARGS.match:
+    with open(os.path.join(ARGS.match, "layout.json")) as _f:
+        MATCH_LAYOUT = json.load(_f)
+    if MATCH_LAYOUT.get("measure") != MEASURE or "target_px" not in MATCH_LAYOUT:
+        sys.exit(f"{ARGS.match}/layout.json is for a different measure or "
+                 "has no target_px; re-run that folder first.")
 MODEL_PATH = os.path.join(SCRIPT_DIR, "models", "face_landmarker.task")
 
 # Target value of the measure in pixels. None -> median over all images.
@@ -201,7 +221,10 @@ def main():
             for n in measures}
     target = TARGET_PX or float(np.median(list(size.values())))
     w, h = next(iter(images.values())).size
-    if EYES_Y_FRAC is None:
+    if MATCH_LAYOUT:
+        target = MATCH_LAYOUT["target_px"]
+        eyes_y = 0.0  # replaced below by the matched layout
+    elif EYES_Y_FRAC is None:
         # median eye height after scaling each face around its own eyes is
         # just the median of the original eye heights
         eyes_y = float(np.median([m[0][1] for m in measures.values()]))
@@ -220,7 +243,15 @@ def main():
             angle = np.degrees(np.arctan2(d[1], d[0]))
         params[name] = (target / size[name], angle)
 
-    if CANVAS_MODE == "fit":
+    if MATCH_LAYOUT:
+        # Same canvas and eye position as the matched set; anything outside
+        # that canvas is cut off (reported at the end).
+        mw, mh = MATCH_LAYOUT["canvas_px"]
+        target_eye = np.array(MATCH_LAYOUT["eyes_px"], dtype=float)
+        outputs = {n: transform(_pad(images[n], max(mw, mh, w, h)), s, a,
+                                measures[n][0], target_eye).crop((0, 0, mw, mh))
+                   for n, (s, a) in params.items()}
+    elif CANVAS_MODE == "fit":
         # Render everything on a big working canvas, find the area any image
         # uses, and crop all images to the same square around it.
         big = 3 * max(w, h)
@@ -279,15 +310,21 @@ def main():
 
     # Face center = halfway between the eyes and the (median) chin. Eyes are
     # at the same spot in every image, so one layout fits all of them.
+    # A matched set reuses the reference face center, so faces from both sets
+    # land on exactly the same spot.
     chin_med = np.median([c for _, _, _, c in sheet_items], axis=0)
     face_center = (target_eye + chin_med) / 2
+    if MATCH_LAYOUT:
+        face_center = np.array(MATCH_LAYOUT["face_center_px"], dtype=float)
     with open(os.path.join(OUTPUT_DIR, "layout.json"), "w") as f:
         json.dump({
             "measure": MEASURE,
+            "target_px": round(float(target), 3),
             "canvas_px": list(out.size),
             "eyes_px": [round(float(v), 1) for v in target_eye],
             "chin_median_px": [round(float(v), 1) for v in chin_med],
             "face_center_px": [round(float(v), 1) for v in face_center],
+            "matched_to": ARGS.match,
         }, f, indent=2)
 
     scales = np.array([r["scale"] for r in report])

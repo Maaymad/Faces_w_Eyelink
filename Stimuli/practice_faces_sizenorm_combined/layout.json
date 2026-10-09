@@ -1,0 +1,21 @@
+{
+  "measure": "combined",
+  "target_px": 95.317,
+  "canvas_px": [
+    452,
+    452
+  ],
+  "eyes_px": [
+    226.0,
+    200.0
+  ],
+  "chin_median_px": [
+    229.0,
+    327.0
+  ],
+  "face_center_px": [
+    225.5,
+    264.2
+  ],
+  "matched_to": "Stimuli/experimental_faces_sizenorm_combined"
+}
