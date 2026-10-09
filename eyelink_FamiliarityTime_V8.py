@@ -284,12 +284,13 @@ PRACTICE_FACE_FOLDER_NAME     = "practice_faces_sizenorm_combined"
 FACE_WIDTH_DEG  = 13.56
 FACE_HEIGHT_DEG = 13.56
 
-# Per stimulus folder: shift, as a fraction of the displayed image size,
-# that puts the center of the face (halfway between the eyes and the chin)
-# at the screen center instead of the center of the image. Filled in main()
-# from each folder's layout.json (written by normalize_face_size.py);
+# Per stimulus image: shift, as a fraction of the displayed image size,
+# that puts the middle of the nose (halfway between the bridge top and the
+# tip, measured per image) at the screen center -- where the centered
+# fixation crosses are -- instead of the center of the image. Filled in
+# main() from each folder's layout.json (written by normalize_face_size.py);
 # images from other folders are centered as whole images.
-FACE_CENTER_SHIFTS = {}   # {absolute folder path: (x_frac, y_frac)}
+FACE_CENTER_SHIFTS = {}   # {absolute folder path: {file name: (x_frac, y_frac)}}
 DOT_RADIUS      = 10   # pixels (unused in main task, kept for legacy)
 
 
@@ -397,26 +398,29 @@ def calculate_face_size():
 
 
 def load_face_center_shift(folder):
-    """Read layout.json from a normalized stimulus folder and return the
-    (x, y) shift, as a fraction of the image size, that moves the face
-    center to the screen center. (0, 0) if the folder has no layout.json."""
+    """Read layout.json from a normalized stimulus folder and return
+    {file name: (x, y) shift}, as a fraction of the image size, that moves
+    each image's nose to the screen center. Empty if there is no layout.json
+    (images are then centered as whole images)."""
     path = os.path.join(folder, "layout.json")
     if not os.path.isfile(path):
         print(f"No layout.json in '{folder}' -- centering the whole image.")
-        return (0.0, 0.0)
+        return {}
     with open(path) as f:
         layout = json.load(f)
     w, h = layout["canvas_px"]
-    cx, cy = layout["face_center_px"]
     # image y grows downward, PsychoPy y grows upward
-    return ((w / 2 - cx) / w, (cy - h / 2) / h)
+    return {name: ((w / 2 - nx) / w, (ny - h / 2) / h)
+            for name, (nx, ny) in layout["nose_px"].items()}
 
 
 def face_pos(face_image, face_size):
     """Screen position for a face image of the given displayed size: the
-    face itself is centered for normalized stimuli, the image otherwise."""
+    nose is at the screen center for normalized stimuli, the image center
+    otherwise."""
     folder = os.path.dirname(os.path.abspath(face_image))
-    sx, sy = FACE_CENTER_SHIFTS.get(folder, (0.0, 0.0))
+    shifts = FACE_CENTER_SHIFTS.get(folder, {})
+    sx, sy = shifts.get(os.path.basename(face_image), (0.0, 0.0))
     return (sx * face_size[0], sy * face_size[1])
 
 

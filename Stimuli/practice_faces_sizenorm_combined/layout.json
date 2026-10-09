@@ -17,5 +17,39 @@
     225.5,
     264.2
   ],
-  "matched_to": "Stimuli/experimental_faces_sizenorm_combined"
+  "matched_to": "Stimuli/experimental_faces_sizenorm_combined",
+  "nose_px": {
+    "P_F_1.png": [
+      228.7,
+      223.0
+    ],
+    "P_F_2.png": [
+      224.9,
+      223.4
+    ],
+    "P_F_3.png": [
+      226.5,
+      225.7
+    ],
+    "P_F_4.png": [
+      224.6,
+      225.0
+    ],
+    "P_M_1.png": [
+      231.9,
+      219.9
+    ],
+    "P_M_2.png": [
+      225.5,
+      221.3
+    ],
+    "P_M_3.png": [
+      226.7,
+      225.1
+    ],
+    "P_M_4.png": [
+      224.8,
+      223.3
+    ]
+  }
 }

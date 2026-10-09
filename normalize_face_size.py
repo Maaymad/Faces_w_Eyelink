@@ -32,9 +32,11 @@ Outputs (OUTPUT_DIR):
   face_size_check.png        contact sheet of all results with the
                              detected eyes and chin marked, for checking
   layout.json                canvas size and where the eyes, chin and face
-                             center are on it (shared by all images). The
-                             experiment reads this to center the face itself
-                             on the screen rather than the whole image.
+                             center are on it (shared by all images), plus
+                             the middle of the nose in each image
+                             ("nose_px"). The experiment reads this to put
+                             each face's nose at the screen center rather
+                             than centering the whole image.
 
 Run with venv311 (needs mediapipe and the model file in models/):
     venv311/bin/python normalize_face_size.py              # eye_chin
@@ -107,12 +109,15 @@ LEVEL_EYES = False
 RIGHT_IRIS = 468   # center of the right iris (subject's right)
 LEFT_IRIS = 473    # center of the left iris
 CHIN = 152         # lowest point of the chin (menton)
+NOSE_TOP = 168     # top of the nose bridge, between the eyes
+NOSE_TIP = 1       # tip of the nose
 
 IMAGE_EXTS = (".png",)
 
 
 def detect_landmarks(landmarker, rgba):
-    """Return (eye_mid, chin, right_eye, left_eye) in pixels, or None."""
+    """Return (eye_mid, chin, right_eye, left_eye, nose) in pixels, or None.
+    nose = middle of the nose, halfway between the bridge top and the tip."""
     # Detect on the face composited over white (the model expects RGB)
     rgb = Image.alpha_composite(
         Image.new("RGBA", rgba.size, (255, 255, 255, 255)), rgba).convert("RGB")
@@ -128,7 +133,8 @@ def detect_landmarks(landmarker, rgba):
 
     right_eye, left_eye, chin = pt(RIGHT_IRIS), pt(LEFT_IRIS), pt(CHIN)
     eye_mid = (right_eye + left_eye) / 2
-    return eye_mid, chin, right_eye, left_eye
+    nose = (pt(NOSE_TOP) + pt(NOSE_TIP)) / 2
+    return eye_mid, chin, right_eye, left_eye, nose
 
 
 def transform(rgba, scale, angle_deg, eye_mid, target_eye):
@@ -234,7 +240,7 @@ def main():
 
     params = {}
     for name in measures:
-        eye_mid, chin, r_eye, l_eye = measures[name]
+        eye_mid, chin, r_eye, l_eye, _ = measures[name]
         angle = 0.0
         if LEVEL_EYES:
             d = l_eye - r_eye          # subject's right -> left eye
@@ -275,10 +281,11 @@ def main():
                    for n, (s, a) in params.items()}
 
     report, sheet_items, clipped = [], [], []
+    nose_out = {}
     for name in names:
         if name not in measures:
             continue
-        eye_mid, chin, r_eye, l_eye = measures[name]
+        eye_mid, chin, r_eye, l_eye, nose = measures[name]
         scale, angle = params[name]
         out = outputs[name]
         out.save(os.path.join(OUTPUT_DIR, name))
@@ -288,6 +295,9 @@ def main():
             clipped.append(name)
         new_chin = target_eye + (chin - eye_mid) * scale  # (ignores rotation)
         sheet_items.append((name, out, target_eye, new_chin))
+        a = np.radians(angle)  # same forward map as transform()
+        m = scale * np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+        nose_out[name] = target_eye + m @ (nose - eye_mid)
         report.append({
             "file": name,
             "measure": MEASURE,
@@ -325,6 +335,8 @@ def main():
             "chin_median_px": [round(float(v), 1) for v in chin_med],
             "face_center_px": [round(float(v), 1) for v in face_center],
             "matched_to": ARGS.match,
+            "nose_px": {n: [round(float(v), 1) for v in p]
+                        for n, p in nose_out.items()},
         }, f, indent=2)
 
     scales = np.array([r["scale"] for r in report])
