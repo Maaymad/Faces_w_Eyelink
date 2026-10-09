@@ -1,0 +1,19 @@
+{
+  "measure": "combined",
+  "canvas_px": [
+    452,
+    452
+  ],
+  "eyes_px": [
+    226.0,
+    200.0
+  ],
+  "chin_median_px": [
+    225.0,
+    328.4
+  ],
+  "face_center_px": [
+    225.5,
+    264.2
+  ]
+}

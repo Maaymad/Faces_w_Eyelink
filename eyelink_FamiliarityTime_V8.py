@@ -27,6 +27,7 @@ V8 changes vs V7:
 import pylink
 import os
 import csv
+import json
 import random
 import time
 import threading
@@ -263,15 +264,29 @@ MAX_PRACTICE_SESSIONS  = 2
 PRACTICE_SLOW_RESPONSE_SEC  = 5.0  # "fail" feedback: respond slower than this
 PRACTICE_ERROR_FEEDBACK_SEC = 2.0  # "could do better" feedback: off by more than this
 
-# Face stimulus size in visual angle.
+# Experimental stimuli: background removed, then faces made the same size
+# and aligned (eyes at the same spot) by normalize_face_size.py combined.
+EXPERIMENTAL_FACE_FOLDER_NAME = "experimental_faces_sizenorm_combined"
+
+# Face stimulus size in visual angle (width of the whole image).
 # Matched to the Gorilla version of the task: on a 14" MacBook Pro
 # (1512 x 982, ~30.2 cm wide) the 400x400 image is shown ~371 px wide
 # (~24.6% of screen width) = ~7.43 cm, i.e. ~7.09 deg at 60 cm.
+# Face size was then set to 12 deg (image width, 400x400 images). The
+# normalized stimuli sit on a larger 452x452 canvas with the faces at their
+# original (median) pixel size, so the image is widened by 452/400 to keep
+# the faces themselves the same size: 12 * 452 / 400 = 13.56 deg.
 # Height follows the image aspect ratio (square images -> same as width).
-# FACE_WIDTH_DEG  = 7.09
-# FACE_HEIGHT_DEG = 7.09
-FACE_WIDTH_DEG  = 12
-FACE_HEIGHT_DEG = 12
+FACE_WIDTH_DEG  = 13.56
+FACE_HEIGHT_DEG = 13.56
+
+# Shift, as a fraction of the displayed image size, that puts the center of
+# the face (halfway between the eyes and the chin) at the screen center
+# instead of the center of the image. Set in main() from layout.json in the
+# experimental stimulus folder (written by normalize_face_size.py) and used
+# only for images from that folder; (0, 0) = center the image.
+FACE_CENTER_SHIFT_FRAC = (0.0, 0.0)
+FACE_CENTER_SHIFT_DIR  = None
 DOT_RADIUS      = 10   # pixels (unused in main task, kept for legacy)
 
 
@@ -378,11 +393,39 @@ def calculate_face_size():
     return (int(w), int(h))
 
 
+def load_face_center_shift(folder):
+    """Read layout.json from a normalized stimulus folder and return the
+    (x, y) shift, as a fraction of the image size, that moves the face
+    center to the screen center. (0, 0) if the folder has no layout.json."""
+    path = os.path.join(folder, "layout.json")
+    if not os.path.isfile(path):
+        print(f"No layout.json in '{folder}' -- centering the whole image.")
+        return (0.0, 0.0)
+    with open(path) as f:
+        layout = json.load(f)
+    w, h = layout["canvas_px"]
+    cx, cy = layout["face_center_px"]
+    # image y grows downward, PsychoPy y grows upward
+    return ((w / 2 - cx) / w, (cy - h / 2) / h)
+
+
+def face_pos(face_image, face_size):
+    """Screen position for a face image of the given displayed size: the
+    face itself is centered for normalized stimuli, the image otherwise."""
+    if os.path.dirname(os.path.abspath(face_image)) != FACE_CENTER_SHIFT_DIR:
+        return (0, 0)
+    sx, sy = FACE_CENTER_SHIFT_FRAC
+    return (sx * face_size[0], sy * face_size[1])
+
+
 def forced_fix_offset_pix():
-    """Distance (px) from screen center down to the pre-face fixation cross.
-    Uses the face width as its height (stimuli are square images)."""
+    """Distance (px) from screen center down to the pre-face fixation cross:
+    FIX_GAP_BELOW_FACE_PIX below the bottom edge of the experimental image.
+    Uses the face width as its height (stimuli are square images). Same
+    position for practice and experimental trials."""
     face_w, _ = calculate_face_size()
-    return face_w / 2 + FIX_GAP_BELOW_FACE_PIX
+    image_center_y = FACE_CENTER_SHIFT_FRAC[1] * face_w
+    return face_w / 2 - image_center_y + FIX_GAP_BELOW_FACE_PIX
 
 
 def verify_display_parameters():
@@ -746,7 +789,8 @@ def run_trial(el_tracker, win, trial_num, face_image, face_duration_s,
         face_size = (face_width_pix, int(face_width_pix * (img_h / img_w)))
     else:
         face_size = (face_width_pix, face_height_pix)
-    face_stim  = visual.ImageStim(win, image=face_image, pos=(0, 0), size=face_size)
+    face_stim  = visual.ImageStim(win, image=face_image,
+                                  pos=face_pos(face_image, face_size), size=face_size)
     fix_pos    = (0, -forced_fix_offset_pix())  # just below the face, fixed every trial
     fix_gray   = _make_fix_cross(win, FIX_COLOR_FORCED, pos=fix_pos,  # pre-face, gaze-contingent
                                  line_width_pix=FIX_LINE_WIDTH_FORCED_PIX)
@@ -1830,7 +1874,11 @@ def main():
 
     # ----- Load stimuli -----
     practice_face_folder    = os.path.join(_script_dir, "Stimuli", "practice_faces")
-    experimental_face_folder= os.path.join(_script_dir, "Stimuli", "experimental_faces")
+    experimental_face_folder= os.path.join(_script_dir, "Stimuli",
+                                           EXPERIMENTAL_FACE_FOLDER_NAME)
+    global FACE_CENTER_SHIFT_FRAC, FACE_CENTER_SHIFT_DIR
+    FACE_CENTER_SHIFT_FRAC = load_face_center_shift(experimental_face_folder)
+    FACE_CENTER_SHIFT_DIR  = os.path.abspath(experimental_face_folder)
 
     practice_faces = []
     if os.path.exists(practice_face_folder):
@@ -1847,7 +1895,9 @@ def main():
     if os.path.exists(experimental_face_folder):
         for root, dirs, files in os.walk(experimental_face_folder):
             for f in files:
-                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+                # face_size_check.png is the normalization contact sheet
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')) \
+                        and not f.startswith('face_size_'):
                     experimental_faces.append(os.path.join(root, f))
     if not experimental_faces:
         print(f"Warning: no experimental faces found in '{experimental_face_folder}'")
