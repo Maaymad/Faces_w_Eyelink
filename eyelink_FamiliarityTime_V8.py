@@ -192,6 +192,11 @@ FORCED_FIX_BELOW_CENTER_PIX    = 318   # raised 40 px from 358
 # with margin.
 FORCED_FIXATION_TOLERANCE_PIX  = 100
 
+# Screen y of the "Press ENTER to continue/begin" line, shared by all
+# instruction, practice and rating screens so it sits at the same height
+# everywhere (was -300 on the tutorial screens and -310 elsewhere).
+FOOTER_Y = -320
+
 # Tutorial font
 _PSYCHOPY_FONT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(visual.__file__)), 'assets', 'fonts')
@@ -1002,7 +1007,7 @@ def _show_practice_intro(win, practice_faces):
                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES))
         return _MultiLineCentered(stims)
 
-    def _footer(label="Press ENTER to continue.", pos=(0, -300)):
+    def _footer(label="Press ENTER to continue.", pos=(0, FOOTER_Y)):
         return visual.TextStim(win, text=label, pos=pos, height=22,
                                color=(0.7, 0.7, 0.7), wrapWidth=900,
                                alignText='center', anchorHoriz='center',
@@ -1038,7 +1043,9 @@ def _show_practice_intro(win, practice_faces):
          (" - once your gaze is detected on it,", False)], y=170, height=26)
     _line("a face will appear above it.", y=135, height=26).draw()
     _draw_fix(fix_small)
-    _footer(pos=(0, -300)).draw()  # fixed position -- the cross now sits too low to anchor off of
+    # The cross is shown where it will really be, which is about FOOTER_Y,
+    # so on this screen only the footer goes just below the cross.
+    _footer(pos=(0, min(FOOTER_Y, -forced_fix_offset_pix() - FIX_SIZE_PIX / 2 - 30))).draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
 
@@ -1071,15 +1078,12 @@ def _show_practice_intro(win, practice_faces):
 
         visual.ImageStim(win, image=practice_faces[0],
                          pos=_demo_pos, size=_demo_size).draw()
-        footer_y = visible_bottom - 40
-    else:
-        footer_y = -300
     _line("This is how each face will appear.", y=header_y[0]).draw()
     _mixed_bold_line(
         [("Each face will appear for ", False),
          ("a specific duration", True),
          (" on the screen.", False)], y=header_y[1])
-    _footer(pos=(0, footer_y)).draw()
+    _footer().draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
 
@@ -1137,7 +1141,7 @@ def _show_post_practice_screen(win):
     lines += _multiline_centered(
         "The experiment will start in the next screen. Be ready!",
         y=-150, height=26)
-    lines += _multiline_centered("Press ENTER to begin.", y=-310, height=22)
+    lines += _multiline_centered("Press ENTER to begin.", y=FOOTER_Y, height=22)
 
     for stim in lines:
         stim.draw()
@@ -1251,7 +1255,7 @@ def run_ratings(win, face_images, participant_id, session):
         pos=(0, 20), height=28, wrapWidth=900)
     draw_all_centered_multiline_text(
         win, "Press ENTER to continue.",
-        pos=(0, -310), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900)
+        pos=(0, FOOTER_Y), height=22, color=(0.7, 0.7, 0.7), wrapWidth=900)
     win.flip()
     wait_for_keys_or_exit(["space"])
 
@@ -1304,11 +1308,11 @@ def run_ratings(win, face_images, participant_id, session):
                                       wrapWidth=900, font=TUTORIAL_FONT_NAME,
                                       fontFiles=TUTORIAL_FONT_FILES)
     prac_ft_wait    = visual.TextStim(win, text="Move both sliders, then press ENTER to begin rating.",
-                                      pos=(0, -310), height=22, color=_LC, wrapWidth=900,
+                                      pos=(0, FOOTER_Y), height=22, color=_LC, wrapWidth=900,
                                       alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_ft_ready   = visual.TextStim(win, text="Press ENTER to begin rating.",
-                                      pos=(0, -310), height=22, color=(0.4, 1, 0.4),
+                                      pos=(0, FOOTER_Y), height=22, color=(0.4, 1, 0.4),
                                       alignText='center', anchorHoriz='center',
                                       wrapWidth=900, font=TUTORIAL_FONT_NAME,
                                       fontFiles=TUTORIAL_FONT_FILES)
@@ -1375,11 +1379,11 @@ def run_ratings(win, face_images, participant_id, session):
         win, "Very\nattractive", pos=(SW / 2 + 110, -110), height=LH,
         color=LC, wrapWidth=100, align="left")
     warn_stim  = visual.TextStim(win, text="Please rate both sliders before continuing.",
-                                 pos=(0, -300), height=22, color=(1, 0.3, 0.3),
+                                 pos=(0, FOOTER_Y), height=22, color=(1, 0.3, 0.3),
                                  wrapWidth=900, font=TUTORIAL_FONT_NAME,
                                  fontFiles=TUTORIAL_FONT_FILES)
     next_footer= visual.TextStim(win, text="Press ENTER to continue.",
-                                 pos=(0, -310), height=22, color=(0.7, 0.7, 0.7),
+                                 pos=(0, FOOTER_Y), height=22, color=(0.7, 0.7, 0.7),
                                  wrapWidth=900, font=TUTORIAL_FONT_NAME,
                                  fontFiles=TUTORIAL_FONT_FILES)
 
@@ -1467,14 +1471,14 @@ def run_post_task_questions(win, participant_id, session):
                                  pos=(0, -310), height=20, color=(1, 0.3, 0.3),
                                  wrapWidth=860, font=TUTORIAL_FONT_NAME,
                                  fontFiles=TUTORIAL_FONT_FILES)
-    _footer_stim = visual.TextStim(win, text="", pos=(0, -355), height=20,
+    _footer_stim = visual.TextStim(win, text="", pos=(0, -365), height=20,
                                    wrapWidth=860, font=TUTORIAL_FONT_NAME,
                                    fontFiles=TUTORIAL_FONT_FILES)
 
     def warn(text="Please answer all questions before continuing.", y=-310):
         _warn_stim.text = text; _warn_stim.pos = (0, y); return _warn_stim
 
-    def footer(ready, y=-355):
+    def footer(ready, y=-365):
         _footer_stim.text = "Press ENTER to continue." if ready \
                             else "Answer all questions, then press ENTER."
         _footer_stim.setColor((0.4, 1, 0.4) if ready else LC, 'rgb')
@@ -1529,7 +1533,7 @@ def run_post_task_questions(win, participant_id, session):
         "Please answer all questions honestly.",
         pos=(0, 20), height=28, wrapWidth=860)
     visual.TextStim(win, text="Press ENTER to begin.",
-                    pos=(0, -310), height=22, color=(0.7, 0.7, 0.7),
+                    pos=(0, FOOTER_Y), height=22, color=(0.7, 0.7, 0.7),
                     wrapWidth=860, font=TUTORIAL_FONT_NAME,
                     fontFiles=TUTORIAL_FONT_FILES).draw()
     safe_flip(win)
