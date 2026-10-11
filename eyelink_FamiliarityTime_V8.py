@@ -185,7 +185,7 @@ FIX_LINE_WIDTH_REPRODUCTION_PIX = 9        # thicker than the forced-fixation cr
 # 400x400 images (60 px below their bottom edge). Gaze must land within
 # FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
-FORCED_FIX_BELOW_CENTER_PIX    = 358
+FORCED_FIX_BELOW_CENTER_PIX    = 318   # raised 40 px from 358
 # Live gaze logs (after fixing the coordinate conversion) showed a
 # consistent ~40-65px calibration offset at this screen position (near the
 # bottom edge, outside the HV9 calibration's best-covered area) -- not
