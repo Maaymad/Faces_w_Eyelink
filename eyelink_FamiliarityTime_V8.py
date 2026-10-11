@@ -1078,11 +1078,10 @@ def _show_practice_intro(win, practice_faces):
     wait_for_keys_or_exit(['space'])
 
     # Screen 2
-    _line("This is how each face will appear.", y=240).draw()
-    _mixed_bold_line(
-        [("Each face will appear for ", False),
-         ("a specific duration", True),
-         (" on the screen.", False)], y=180)
+    # The demo face sits where it will in the real trial. The text is laid
+    # out around the visible part of the image (transparent PNG margins
+    # ignored), so the face never covers it.
+    header_y = (240, 180)
     if practice_faces:
         face_width_pix, face_height_pix = calculate_face_size()
         _tmp = visual.ImageStim(win, image=practice_faces[0])
@@ -1091,15 +1090,30 @@ def _show_practice_intro(win, practice_faces):
             if _w > 0 and _h > 0 else (face_width_pix, face_height_pix)
         _demo_pos = face_pos(practice_faces[0], _demo_size)  # same as the real trial
 
-        # Caption directly above the demo image
-        caption_y = _demo_pos[1] + _demo_size[1] / 2 + 40
+        # Visible top/bottom of the image in screen coordinates
+        from PIL import Image as _PILImage
+        _img = _PILImage.open(practice_faces[0])
+        _bbox = (_img.getchannel('A').getbbox()
+                 if 'A' in _img.getbands() else None) or (0, 0, _img.width, _img.height)
+        _img_top = _demo_pos[1] + _demo_size[1] / 2
+        visible_top = _img_top - _bbox[1] / _img.height * _demo_size[1]
+        visible_bottom = _img_top - _bbox[3] / _img.height * _demo_size[1]
+
+        # Caption directly above the visible face, header lines above it
+        caption_y = visible_top + 35
+        header_y = (caption_y + 130, caption_y + 70)
         _line("This is how a face will appear:", y=caption_y, height=26).draw()
 
         visual.ImageStim(win, image=practice_faces[0],
                          pos=_demo_pos, size=_demo_size).draw()
-        footer_y = _demo_pos[1] - _demo_size[1] / 2 - 40
+        footer_y = visible_bottom - 40
     else:
         footer_y = -300
+    _line("This is how each face will appear.", y=header_y[0]).draw()
+    _mixed_bold_line(
+        [("Each face will appear for ", False),
+         ("a specific duration", True),
+         (" on the screen.", False)], y=header_y[1])
     _footer(pos=(0, footer_y)).draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
