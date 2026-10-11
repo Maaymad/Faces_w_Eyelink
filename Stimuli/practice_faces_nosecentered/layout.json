@@ -1,0 +1,56 @@
+{
+  "measure": "combined",
+  "center_on": "nose",
+  "target_px": 95.317,
+  "canvas_px": [
+    452,
+    452
+  ],
+  "eyes_px": [
+    226.0,
+    202.7
+  ],
+  "chin_median_px": [
+    228.6,
+    328.8
+  ],
+  "face_center_px": [
+    225.8,
+    266.3
+  ],
+  "matched_to": "Stimuli/experimental_faces_nosecentered",
+  "nose_px": {
+    "P_F_1.png": [
+      226.0,
+      226.0
+    ],
+    "P_F_2.png": [
+      226.0,
+      226.0
+    ],
+    "P_F_3.png": [
+      226.0,
+      226.0
+    ],
+    "P_F_4.png": [
+      226.0,
+      226.0
+    ],
+    "P_M_1.png": [
+      226.0,
+      226.0
+    ],
+    "P_M_2.png": [
+      226.0,
+      226.0
+    ],
+    "P_M_3.png": [
+      226.0,
+      226.0
+    ],
+    "P_M_4.png": [
+      226.0,
+      226.0
+    ]
+  }
+}

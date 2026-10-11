@@ -15,13 +15,19 @@ not affect. MEASURE picks which one:
 
 Every image is then scaled so that this measure equals the
 same target (by default the median over all images, so on average faces
-change as little as possible), and shifted so that the midpoint between the
-eyes lands on the same spot in every image. Transparency is kept.
+change as little as possible), and shifted so that a chosen point lands on
+the same spot in every image (--center):
+  "eyes" -- the midpoint between the eyes (default).
+  "nose" -- the middle of the nose (halfway between the bridge top and the
+            tip), placed exactly at the center of the image. The experiment
+            can then simply center each image to center the face on its nose.
+Transparency is kept.
 
 Canvas (CANVAS_MODE):
   "fit"  -- one square canvas, shared by all images, just big enough that no
             face or hair is cut off after scaling (eyes centered
-            horizontally). Recommended.
+            horizontally; with --center nose, the nose at the exact center).
+            Recommended.
   "same" -- keep the input size (400x400); faces that were scaled up may get
             hair cut off at the edge (listed at the end of the run).
 
@@ -50,6 +56,14 @@ set exactly -- same face size, canvas, eye position and face center -- use
         --input Stimuli/practice_faces_nobg \
         --output Stimuli/practice_faces_sizenorm_combined \
         --match Stimuli/experimental_faces_sizenorm_combined
+
+Nose-centered sets used by the experiment:
+    venv311/bin/python normalize_face_size.py combined --center nose \
+        --output Stimuli/experimental_faces_nosecentered
+    venv311/bin/python normalize_face_size.py combined --center nose \
+        --input Stimuli/practice_faces_nobg \
+        --output Stimuli/practice_faces_nosecentered \
+        --match Stimuli/experimental_faces_nosecentered
 """
 
 import argparse
@@ -73,8 +87,13 @@ _parser.add_argument("measure", nargs="?", default="eye_chin", choices=MEASURES)
 _parser.add_argument("--input", help="folder of background-removed PNGs")
 _parser.add_argument("--output", help="output folder")
 _parser.add_argument("--match", help="normalized folder whose layout.json to match")
+_parser.add_argument("--center", choices=("eyes", "nose"), default="eyes",
+                     help="point placed at the same spot in every image")
+_parser.add_argument("--target", type=float,
+                     help="target size of the measure in px (default: median)")
 ARGS, _ = _parser.parse_known_args()
 MEASURE = ARGS.measure
+CENTER_ON = ARGS.center
 
 INPUT_DIR = ARGS.input or os.path.join(SCRIPT_DIR, "Stimuli", "experimental_faces_nobg")
 OUTPUT_DIR = ARGS.output or os.path.join(
@@ -87,10 +106,13 @@ if ARGS.match:
     if MATCH_LAYOUT.get("measure") != MEASURE or "target_px" not in MATCH_LAYOUT:
         sys.exit(f"{ARGS.match}/layout.json is for a different measure or "
                  "has no target_px; re-run that folder first.")
+    if MATCH_LAYOUT.get("center_on", "eyes") != CENTER_ON:
+        sys.exit(f"{ARGS.match} was made with --center "
+                 f"{MATCH_LAYOUT.get('center_on', 'eyes')}; use the same here.")
 MODEL_PATH = os.path.join(SCRIPT_DIR, "models", "face_landmarker.task")
 
 # Target value of the measure in pixels. None -> median over all images.
-TARGET_PX = None
+TARGET_PX = ARGS.target
 
 # Where the midpoint between the eyes goes, as a fraction of the canvas
 # (x, y). None for y -> median eye height over all images (after scaling),
@@ -189,6 +211,9 @@ def contact_sheet(items, path, cols=10, thumb=160):
         cx, cy = x0 + chin[0] * s, y0 + chin[1] * s
         draw.line([(x0, ey), (x0 + thumb, ey)], fill=(0, 160, 255))   # eyes line
         draw.line([(x0, cy), (x0 + thumb, cy)], fill=(255, 80, 0))    # chin line
+        mx, my = x0 + thumb / 2, y0 + thumb / 2                          # image center
+        draw.line([(mx - 5, my), (mx + 5, my)], fill=(255, 0, 0))
+        draw.line([(mx, my - 5), (mx, my + 5)], fill=(255, 0, 0))
         draw.text((x0 + 3, y0 + thumb), os.path.splitext(name)[0], fill=(255, 255, 255))
     sheet.save(path)
 
@@ -249,7 +274,46 @@ def main():
             angle = np.degrees(np.arctan2(d[1], d[0]))
         params[name] = (target / size[name], angle)
 
-    if MATCH_LAYOUT:
+    def fwd(name):
+        """Linear part of the forward map (scale + rotation) for one image."""
+        s, a = params[name]
+        a = np.radians(a)
+        return s * np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+
+    def eye_target_for_nose_at(name, point):
+        """Where the eyes must go so that this image's nose lands on point."""
+        eye_mid, nose = measures[name][0], measures[name][4]
+        return point - fwd(name) @ (nose - eye_mid)
+
+    eye_targets = {}  # per image: where its eye midpoint ends up
+    if CENTER_ON == "nose" and MATCH_LAYOUT:
+        mw, mh = MATCH_LAYOUT["canvas_px"]
+        center = np.array([mw / 2, mh / 2])
+        eye_targets = {n: eye_target_for_nose_at(n, center) for n in params}
+        outputs = {n: transform(_pad(images[n], max(mw, mh, w, h)), s, a,
+                                measures[n][0], eye_targets[n]).crop((0, 0, mw, mh))
+                   for n, (s, a) in params.items()}
+    elif CENTER_ON == "nose":
+        # Nose of every image at the center of a big working canvas, then one
+        # square crop centered on that point that holds every image.
+        big = 3 * max(w, h)
+        center = np.array([big / 2, big / 2])
+        rendered = {n: transform(_pad(images[n], big), s, a, measures[n][0],
+                                 eye_target_for_nose_at(n, center))
+                    for n, (s, a) in params.items()}
+        used = np.zeros((big, big), bool)
+        for im in rendered.values():
+            used |= np.asarray(im)[..., 3] > 10
+        ys, xs = np.where(used)
+        half = max(center[0] - xs.min(), xs.max() + 1 - center[0],
+                   center[1] - ys.min(), ys.max() + 1 - center[1])
+        side = 2 * (int(np.ceil(half)) + CANVAS_MARGIN_PX)
+        left = top = int(center[0] - side / 2)   # big/2 and side/2 are whole
+        box = (left, top, left + side, top + side)
+        outputs = {n: im.crop(box) for n, im in rendered.items()}
+        eye_targets = {n: eye_target_for_nose_at(n, center) - [left, top]
+                       for n in params}
+    elif MATCH_LAYOUT:
         # Same canvas and eye position as the matched set; anything outside
         # that canvas is cut off (reported at the end).
         mw, mh = MATCH_LAYOUT["canvas_px"]
@@ -293,11 +357,10 @@ def main():
         cut = touches_edge(out) and not touches_edge(images[name])
         if cut:
             clipped.append(name)
-        new_chin = target_eye + (chin - eye_mid) * scale  # (ignores rotation)
-        sheet_items.append((name, out, target_eye, new_chin))
-        a = np.radians(angle)  # same forward map as transform()
-        m = scale * np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
-        nose_out[name] = target_eye + m @ (nose - eye_mid)
+        eye_t = eye_targets.get(name, target_eye)
+        new_chin = eye_t + fwd(name) @ (chin - eye_mid)
+        sheet_items.append((name, out, eye_t, new_chin))
+        nose_out[name] = eye_t + fwd(name) @ (nose - eye_mid)
         report.append({
             "file": name,
             "measure": MEASURE,
@@ -323,15 +386,17 @@ def main():
     # A matched set reuses the reference face center, so faces from both sets
     # land on exactly the same spot.
     chin_med = np.median([c for _, _, _, c in sheet_items], axis=0)
-    face_center = (target_eye + chin_med) / 2
+    eyes_med = np.median([e for _, _, e, _ in sheet_items], axis=0)
+    face_center = (eyes_med + chin_med) / 2
     if MATCH_LAYOUT:
         face_center = np.array(MATCH_LAYOUT["face_center_px"], dtype=float)
     with open(os.path.join(OUTPUT_DIR, "layout.json"), "w") as f:
         json.dump({
             "measure": MEASURE,
+            "center_on": CENTER_ON,
             "target_px": round(float(target), 3),
             "canvas_px": list(out.size),
-            "eyes_px": [round(float(v), 1) for v in target_eye],
+            "eyes_px": [round(float(v), 1) for v in eyes_med],
             "chin_median_px": [round(float(v), 1) for v in chin_med],
             "face_center_px": [round(float(v), 1) for v in face_center],
             "matched_to": ARGS.match,
@@ -342,8 +407,14 @@ def main():
     scales = np.array([r["scale"] for r in report])
     print(f"{len(report)} faces -> {OUTPUT_DIR} "
           f"(canvas {out.size[0]}x{out.size[1]})")
-    print(f"{MEASURE} target: {target:.1f} px; eyes at "
-          f"({target_eye[0]:.0f}, {target_eye[1]:.0f})")
+    if CENTER_ON == "nose":
+        noses = np.array(list(nose_out.values()))
+        print(f"{MEASURE} target: {target:.1f} px; nose at "
+              f"({noses[:, 0].mean():.2f}, {noses[:, 1].mean():.2f}) "
+              f"[canvas center {out.size[0] / 2}, {out.size[1] / 2}]")
+    else:
+        print(f"{MEASURE} target: {target:.1f} px; eyes at "
+              f"({target_eye[0]:.0f}, {target_eye[1]:.0f})")
     print(f"scale factors: min {scales.min():.3f}, median {np.median(scales):.3f}, "
           f"max {scales.max():.3f}")
     if clipped:

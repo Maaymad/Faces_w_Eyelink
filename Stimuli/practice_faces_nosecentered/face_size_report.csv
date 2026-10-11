@@ -1,0 +1,9 @@
+file,measure,measure_px_before,measure_px_after,eye_chin_px_before,ipd_px_before,scale,rotation_deg,eyes_x_before,eyes_y_before,cut_off_at_edge
+P_F_1.png,combined,102.9,95.3,133.5,79.3,0.9261,0.0,206.4,188.3,False
+P_F_2.png,combined,96.7,95.3,128.8,72.5,0.9862,0.0,205.7,206.6,False
+P_F_3.png,combined,96.5,95.3,124.6,74.8,0.9872,0.0,201.0,206.6,False
+P_F_4.png,combined,91.4,95.3,127.3,65.7,1.0425,0.0,194.1,190.1,False
+P_M_1.png,combined,98.4,95.3,123.5,78.5,0.9683,0.0,203.1,184.9,False
+P_M_2.png,combined,100.0,95.3,135.8,73.6,0.9533,0.0,192.4,194.3,False
+P_M_3.png,combined,97.8,95.3,130.4,73.4,0.9743,0.0,198.1,196.4,False
+P_M_4.png,combined,101.3,95.3,135.1,76.0,0.941,0.0,199.9,195.4,False
