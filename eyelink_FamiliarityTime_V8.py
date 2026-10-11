@@ -174,7 +174,7 @@ FIX_LINE_WIDTH_FORCED_PIX = 6           # thicker than the gray ISI cross
 # large size jump and a much thicker line -- the previous size/color bump
 # (30->40px, gray->white) was not salient enough as a "start now" cue.
 # FIX_COLOR_REPRODUCTION       = (-1, -1, -1)  # black -- strong contrast on gray background
-FIX_COLOR_REPRODUCTION = (-1, -1, 1)    # blue
+FIX_COLOR_REPRODUCTION = (-1, -1, 0.2)  # dark blue, RGB (0, 0, 153) (was (-1, -1, 1) pure blue)
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 9        # thicker than the forced-fixation cross (was 6)
 
