@@ -173,7 +173,8 @@ FIX_LINE_WIDTH_FORCED_PIX = 6           # thicker than the gray ISI cross
 # Reproduction cue: made strongly distinct from the small gray ISI cross via a
 # large size jump and a much thicker line -- the previous size/color bump
 # (30->40px, gray->white) was not salient enough as a "start now" cue.
-FIX_COLOR_REPRODUCTION       = (-1, -1, -1)  # black -- strong contrast on gray background
+# FIX_COLOR_REPRODUCTION       = (-1, -1, -1)  # black -- strong contrast on gray background
+FIX_COLOR_REPRODUCTION = (-1, -1, 1)    # blue
 FIX_SIZE_REPRODUCTION_PIX    = 55          # 3x the small cross (was 40, ~1.3x)
 FIX_LINE_WIDTH_REPRODUCTION_PIX = 9        # thicker than the forced-fixation cross (was 6)
 
@@ -267,8 +268,10 @@ PRACTICE_ERROR_FEEDBACK_SEC = 2.0  # "could do better" feedback: off by more tha
 # (1512 x 982, ~30.2 cm wide) the 400x400 image is shown ~371 px wide
 # (~24.6% of screen width) = ~7.43 cm, i.e. ~7.09 deg at 60 cm.
 # Height follows the image aspect ratio (square images -> same as width).
-FACE_WIDTH_DEG  = 7.09
-FACE_HEIGHT_DEG = 7.09
+# FACE_WIDTH_DEG  = 7.09
+# FACE_HEIGHT_DEG = 7.09
+FACE_WIDTH_DEG  = 12
+FACE_HEIGHT_DEG = 12
 DOT_RADIUS      = 10   # pixels (unused in main task, kept for legacy)
 
 
