@@ -184,7 +184,7 @@ FIX_LINE_WIDTH_REPRODUCTION_PIX = 9        # thicker than the forced-fixation cr
 # 400x400 images (60 px below their bottom edge). Gaze must land within
 # FORCED_FIXATION_TOLERANCE_PIX of the cross continuously for
 # PRE_FACE_FIX_DURATION before the face is shown.
-FORCED_FIX_BELOW_CENTER_PIX    = 318   # raised 40 px from 358
+FORCED_FIX_BELOW_CENTER_PIX    = 260   # raised from 358 -> 318 -> 260
 # Live gaze logs (after fixing the coordinate conversion) showed a
 # consistent ~40-65px calibration offset at this screen position (near the
 # bottom edge, outside the HV9 calibration's best-covered area) -- not
@@ -1042,10 +1042,8 @@ def _show_practice_intro(win, practice_faces):
         [("Look directly at the cross", True),
          (" - once your gaze is detected on it,", False)], y=170, height=26)
     _line("a face will appear above it.", y=135, height=26).draw()
-    _draw_fix(fix_small)
-    # The cross is shown where it will really be, which is about FOOTER_Y,
-    # so on this screen only the footer goes just below the cross.
-    _footer(pos=(0, min(FOOTER_Y, -forced_fix_offset_pix() - FIX_SIZE_PIX / 2 - 30))).draw()
+    _draw_fix(fix_small)  # where the cross really appears in the trials
+    _footer().draw()
     win.flip()
     wait_for_keys_or_exit(['space'])
 
