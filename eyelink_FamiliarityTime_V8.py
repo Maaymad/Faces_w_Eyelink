@@ -1087,7 +1087,7 @@ def _show_practice_intro(win, practice_faces):
 
     # Screen 3
     _line("When the face disappears, a small fixation cross will reappear\n"
-          "at the center of the screen. After, a larger black fixation\n"
+          "at the center of the screen. After, a larger blue fixation\n"
           "cross will appear in the same place.", y=270, height=28).draw()
     _mixed_bold_line(
         [("Your task is to match the duration of the ", False),
