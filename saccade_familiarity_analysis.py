@@ -24,7 +24,7 @@ import eyelinkio
 # SETTINGS
 ####################################################
 
-DATA_DIR = Path("/Users/maaymadar/Documents/Huji24-25/LandauLab/Faces_w_Eyelink/data/pilot")
+DATA_DIR = Path(__file__).resolve().parent / "data" / "pilot"   # relative to this script
 OUTPUT_DIR = DATA_DIR / "figures"
 STATS_DIR = DATA_DIR / "stats"
 

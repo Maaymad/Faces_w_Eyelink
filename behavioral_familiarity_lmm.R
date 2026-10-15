@@ -71,27 +71,33 @@ suppressPackageStartupMessages({
   library(ggplot2)
 })
 
-# Find the project's data/ folder whether this runs with Rscript, source() or
-# RStudio (whose working directory is usually not the project folder).
-script_dir <- tryCatch({
+# Find the project's data/ folder (relative to this script) whether this runs
+# with Rscript, source(), or line by line in RStudio (whose working directory
+# is usually not the project folder). Each way of finding the script's folder
+# is tried on its own, so one failing does not skip the others.
+find_script_dir <- function() {
   args <- commandArgs(trailingOnly = FALSE)
   f <- sub("^--file=", "", args[grep("^--file=", args)])
-  if (length(f)) dirname(normalizePath(f))
-  else if (!is.null(sys.frame(1)$ofile)) dirname(normalizePath(sys.frame(1)$ofile))
-  else if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable())
-    dirname(rstudioapi::getSourceEditorContext()$path)
-  else getwd()
-}, error = function(e) getwd())
+  if (length(f)) return(dirname(normalizePath(f)))                     # Rscript
+  of <- tryCatch(sys.frame(1)$ofile, error = function(e) NULL)
+  if (!is.null(of)) return(dirname(normalizePath(of)))                 # source()
+  rs <- tryCatch(if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable())
+                   rstudioapi::getSourceEditorContext()$path else "",
+                 error = function(e) "")
+  if (nzchar(rs)) return(dirname(normalizePath(rs)))                   # RStudio editor
+  getwd()
+}
+script_dir <- find_script_dir()
 # Use the first candidate that actually holds participant files (another
 # folder named "data", e.g. in the home directory, is skipped).
-candidates <- unique(c(file.path(script_dir, "data"),
-                       "/Users/maaymadar/Documents/Huji24-25/LandauLab/Faces_w_Eyelink/data",
-                       file.path(getwd(), "data")))
+candidates <- unique(c(file.path(script_dir, "data"), file.path(getwd(), "data")))
 has_participants <- function(d) dir.exists(d) &&
   length(list.files(d, pattern = "_behavioral\\.csv$")) > 0
-data_dir <- Filter(has_participants, candidates)[1][[1]]
-if (is.null(data_dir)) stop("Could not find a data/ folder with participant files. Tried:\n  ",
-                            paste(candidates, collapse = "\n  "))
+found <- Filter(has_participants, candidates)
+if (length(found) == 0) stop("Could not find a data/ folder with participant files. Tried:\n  ",
+                            paste(candidates, collapse = "\n  "),
+                            "\nOpen the script from the project folder in RStudio, or setwd() to it.")
+data_dir <- found[[1]]
 cat("Data folder:", data_dir, "\n")
 out_dir <- file.path(data_dir, "analysis_familiarity", "behavioral")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
