@@ -86,14 +86,14 @@ LAMBDA = 6                 # Engbert & Kliegl velocity threshold (x median-based
 # other eye moves at the same time (Engbert & Kliegl's binocular criterion).
 # Recovers microsaccades hidden by noise in one eye (e.g. participant 003)
 # without counting noise. Measures with this detection end in "_bino".
-BINO_LAMBDA = 4
+BINO_LAMBDA = 8
 MIN_DUR_S = 0.009          # minimum event duration (paper: 9 ms)
 MERGE_GAP_S = 0.010        # merge events closer than this
 SACC_MIN_DEG = 1.0         # fixation-inducing saccade (paper: > 1 dva)
-MS_MIN_DEG, MS_MAX_DEG = 0.08, 1.0     # microsaccade (paper: 0.08-1 dva)
+MS_MIN_DEG, MS_MAX_DEG = 0.08, 2.0     # microsaccade (paper: 0.08-2 dva)
 MSRT_MAX_DEG = 0.6         # microsaccades counted for msRT (paper: < 0.6 dva)
-MSRT_WIN_S = (0.150, 0.600)            # msRT window after fixation onset
-BLINK_PAD_S = 0.050        # ignore events this close to a blink
+MSRT_WIN_S = (0.00, 0.600)            # msRT window after fixation onset
+BLINK_PAD_S = 0.100        # ignore events this close to a blink
 FAMILIAR_CUTOFF = 50       # familiarity rating >= cutoff -> "familiar"
 ANTICIPATION_MS = 80       # first saccades starting earlier are anticipatory
 
