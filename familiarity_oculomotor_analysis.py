@@ -88,7 +88,7 @@ OUT_DIR = DATA_DIR / "analysis_familiarity"
 EXCLUSIONS_CSV = OUT_DIR / "behavioral" / "trial_exclusions.csv"
 FIG_DIR, STATS_DIR = OUT_DIR / "figures", OUT_DIR / "stats"
 
-# Display geometry (eyelink_FamiliarityTime_V8.py): 1920 px = 40.6 cm at 60 cm
+# Display geometry (eyelink_FamiliarityTime.py): 1920 px = 40.6 cm at 60 cm
 PX_PER_CM = 1920 / 40.6
 PX_PER_DEG = PX_PER_CM * 2 * 60 * np.tan(np.radians(0.5))
 
