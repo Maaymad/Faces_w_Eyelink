@@ -14,8 +14,14 @@
 # Uses every participant in data/ with a behavioral and a ratings CSV from the
 # same session. Run from the project folder:
 #   Rscript behavioral_familiarity_lmm.R
+# Exclusions (run first; see "exclusions" below): reproductions > 4 s, trials
+# > 3 MAD from their participant x duration median, and participants
+# with a flat / reversed / > 1.5 timing slope. Reported in exclusion_report.txt,
+# listed per trial in trial_exclusions.csv (read by the eye-movement analysis).
 # Output: data/analysis_familiarity/behavioral/lmm_results.txt and figures in
 #         data/analysis_familiarity/behavioral/figures_R/:
+#   0_exclusions_trials_per_participant  every trial, discarded ones marked
+#   0b_exclusions_trial_counts           kept / discarded trials per participant
 #   1_reproduced_vs_shown      reproduced duration per participant and duration
 #                              (bias and central tendency)
 #   2_error_by_familiarity     trial errors vs familiarity rating, with the
@@ -63,6 +69,13 @@
 #                     (rated < 50) and familiar celebrities (rated >= 50). Comparing
 #                     unfamiliar celebrities with the baseline separates familiarity
 #                     from "celebrity photo vs database photo".
+#   10_error_by_familiarity_bins(_centered)
+#                     reproduction error by familiarity-rating bins of 10
+#                     (0-10, ..., 90-100), all participants pooled, 0.8 s and
+#                     1.6 s separately; mean +- SE over trials, n per bin, faint
+#                     lines = participants. "_centered" removes each
+#                     participant's mean error at that duration. Table:
+#                     error_by_familiarity_bins.csv
 
 suppressPackageStartupMessages({
   library(lme4)
@@ -128,6 +141,165 @@ full$duration_factor <- factor(ifelse(full$face_duration_planned_s > 1, "long", 
                                levels = c("short", "long"))
 full$stimuli_condition <- factor(c(israeli = "IL", neutral = "Neutral", uk = "UK")[full$face_nationality],
                                  levels = c("IL", "Neutral", "UK"))
+
+# ---------- exclusions ----------
+# Applied in this order; every discarded trial and participant is listed with
+# its reason in exclusion_report.txt and trial_exclusions.csv. The eye-movement
+# analysis (familiarity_oculomotor_analysis.py) reads trial_exclusions.csv and
+# drops the same trials and participants, so run this script first.
+#   1. trials with a reproduction above MAX_REPRO_S (not a real reproduction)
+#   2. trials more than MAD_K scaled MADs from the median of their cell
+#      (participant x duration; scaled MAD = 1.4826 * MAD)
+#   3. participants whose timing slope (reproduced on shown duration, from the
+#      kept trials) is flat (not > 0, one-sided p >= .05), reversed (< 0), or
+#      above MAX_SLOPE
+MAX_REPRO_S <- 4.0
+MAD_K <- 3
+MAX_SLOPE <- 1.5
+
+full$exclusion <- NA_character_
+full$exclusion[full$reproduced_duration_s > MAX_REPRO_S] <- sprintf("reproduction > %.1f s", MAX_REPRO_S)
+excl_cell <- interaction(full$participant, full$duration_factor, drop = TRUE)
+pending <- is.na(full$exclusion)
+full$mad_dist <- NA_real_
+full$mad_dist[pending] <- ave(full$reproduced_duration_s[pending], excl_cell[pending],
+                              FUN = function(x) {
+                                s <- mad(x)
+                                if (!is.finite(s) || s == 0) rep(0, length(x)) else abs(x - median(x)) / s
+                              })
+full$exclusion[pending & full$mad_dist > MAD_K] <- sprintf("> %g MAD from cell median", MAD_K)
+
+subj_slopes <- do.call(rbind, lapply(split(full[is.na(full$exclusion), ], full$participant[is.na(full$exclusion)],
+                                           drop = TRUE), function(d) {
+  ct <- coef(summary(lm(reproduced_duration_s ~ face_duration_planned_s, data = d)))
+  b <- ct["face_duration_planned_s", ]
+  p_pos <- pt(b["t value"], df = nrow(d) - 2, lower.tail = FALSE)
+  why <- if (b["Estimate"] < 0) "reversed slope (0.8 s reproduced longer than 1.6 s)"
+         else if (p_pos >= 0.05) "flat slope (not > 0, one-sided p >= .05)"
+         else if (b["Estimate"] > MAX_SLOPE) sprintf("slope > %.1f", MAX_SLOPE)
+         else NA_character_
+  data.frame(participant = d$participant[1], n_trials = nrow(d),
+             mean_short = mean(d$reproduced_duration_s[d$duration_factor == "short"]),
+             mean_long = mean(d$reproduced_duration_s[d$duration_factor == "long"]),
+             slope = unname(b["Estimate"]), slope_se = unname(b["Std. Error"]),
+             p_one_sided = unname(p_pos), excluded_reason = why)
+}))
+bad_subj <- subj_slopes$participant[!is.na(subj_slopes$excluded_reason)]
+full$subject_excluded <- full$participant %in% bad_subj
+
+trial_excl <- full[, c("participant", "trial_num", "face", "face_duration_planned_s", "stimuli_condition",
+                       "reproduced_duration_s", "mad_dist", "exclusion")]
+trial_excl$subject_excluded <- full$subject_excluded
+trial_excl$excluded <- !is.na(trial_excl$exclusion) | trial_excl$subject_excluded
+trial_excl$reason <- ifelse(!is.na(trial_excl$exclusion), trial_excl$exclusion,
+                            ifelse(trial_excl$subject_excluded,
+                                   paste("participant excluded:",
+                                         subj_slopes$excluded_reason[match(trial_excl$participant,
+                                                                           subj_slopes$participant)]), ""))
+trial_excl$exclusion <- NULL
+trial_excl <- trial_excl[order(trial_excl$participant, trial_excl$trial_num), ]
+write.csv(trial_excl, file.path(out_dir, "trial_exclusions.csv"), row.names = FALSE)
+write.csv(subj_slopes, file.path(out_dir, "participant_slopes.csv"), row.names = FALSE)
+
+sink(file.path(out_dir, "exclusion_report.txt"), split = TRUE)
+cat("EXCLUSIONS\n==========\n")
+cat(sprintf("Rules: reproduction > %.1f s; > %g scaled MADs from the median of participant x duration;\n",
+            MAX_REPRO_S, MAD_K))
+cat(sprintf("participants with a timing slope < 0, not > 0 (one-sided p >= .05), or > %.1f.\n\n", MAX_SLOPE))
+cat("Trials before exclusions:", nrow(full), "from", nlevels(factor(full$participant)), "participants\n\n")
+cat("1-2. Discarded trials (participants that are kept or excluded alike):\n")
+td <- full[!is.na(full$exclusion), ]
+td <- td[order(td$participant, td$trial_num), ]
+if (nrow(td)) {
+  for (i in seq_len(nrow(td)))
+    cat(sprintf("  %s trial %3d  %-8s %.1f s %-7s reproduced %.2f s  (%s MAD)  -> %s\n",
+                td$participant[i], td$trial_num[i], td$face[i], td$face_duration_planned_s[i],
+                td$stimuli_condition[i], td$reproduced_duration_s[i],
+                ifelse(is.na(td$mad_dist[i]), "-", sprintf("%.1f", td$mad_dist[i])), td$exclusion[i]))
+} else cat("  none\n")
+cat("\n  Count per reason:\n"); print(table(td$exclusion))
+cat(sprintf("\n  (For comparison: %d trials would be discarded with %d MADs instead of %g.)\n",
+            sum(full$mad_dist > 4, na.rm = TRUE), 4, MAD_K))
+cat("\n3. Timing slope per participant (kept trials):\n")
+print(transform(subj_slopes, mean_short = round(mean_short, 3), mean_long = round(mean_long, 3),
+                slope = round(slope, 3), slope_se = round(slope_se, 3), p_one_sided = signif(p_one_sided, 3)),
+      row.names = FALSE)
+cat("\nDiscarded participants:", if (length(bad_subj)) paste(bad_subj, collapse = ", ") else "none", "\n")
+for (s in bad_subj) cat(sprintf("  %s: %s\n", s, subj_slopes$excluded_reason[subj_slopes$participant == s]))
+cat("\nPer participant (trials):\n")
+per_subj <- data.frame(
+  participant = levels(factor(full$participant)),
+  total = as.vector(table(factor(full$participant))),
+  over_max = as.vector(tapply(grepl("^reproduction", full$exclusion), factor(full$participant), sum)),
+  mad = as.vector(tapply(grepl("MAD", full$exclusion), factor(full$participant), sum)))
+per_subj$kept <- per_subj$total - per_subj$over_max - per_subj$mad
+per_subj$participant_excluded <- per_subj$participant %in% bad_subj
+print(per_subj, row.names = FALSE)
+kept_all <- full[is.na(full$exclusion) & !full$subject_excluded, ]
+cat(sprintf("\nAnalyzed: %d trials from %d participants (%d trials discarded in total).\n",
+            nrow(kept_all), length(unique(kept_all$participant)), nrow(full) - nrow(kept_all)))
+sink()
+
+# figure: every trial per participant, with the discarded ones marked
+excl_fig_dir <- file.path(out_dir, "figures_R")
+dir.create(excl_fig_dir, recursive = TRUE, showWarnings = FALSE)
+pd_ex <- full
+pd_ex$status <- factor(ifelse(is.na(pd_ex$exclusion), "kept",
+                              ifelse(grepl("MAD", pd_ex$exclusion), sprintf("> %g MAD", MAD_K),
+                                     sprintf("> %.0f s", MAX_REPRO_S))),
+                       levels = c("kept", sprintf("> %g MAD", MAD_K), sprintf("> %.0f s", MAX_REPRO_S)))
+subj_lab <- with(subj_slopes, setNames(
+  sprintf("%s  slope %.2f%s", participant, slope,
+          ifelse(is.na(excluded_reason), "", "  EXCLUDED")), participant))
+pd_ex$panel <- factor(subj_lab[as.character(pd_ex$participant)], levels = subj_lab)
+pd_ex$duration <- factor(paste(pd_ex$face_duration_planned_s, "s"), levels = c("0.8 s", "1.6 s"))
+dur_cols <- c(`0.8 s` = "#4C72B0", `1.6 s` = "#DD8452")
+excl_panels <- data.frame(panel = factor(subj_lab[!is.na(subj_slopes$excluded_reason)], levels = subj_lab))
+g_ex <- ggplot(pd_ex, aes(familiarity_rating, reproduced_duration_s, colour = duration)) +
+  (if (nrow(excl_panels)) geom_rect(data = excl_panels, inherit.aes = FALSE,
+                                    aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf),
+                                    fill = "#FDE0DD", alpha = 0.6)) +
+  geom_hline(data = data.frame(y = c(0.8, 1.6), duration = names(dur_cols)),
+             aes(yintercept = y, colour = duration), linetype = "dashed", linewidth = 0.4) +
+  geom_vline(xintercept = 50, linetype = "dotted", colour = "grey60") +
+  geom_point(aes(shape = status, size = status), alpha = 0.75) +
+  geom_smooth(data = pd_ex[pd_ex$status == "kept", ], method = "lm", formula = y ~ x,
+              se = FALSE, linewidth = 0.8) +
+  scale_shape_manual(values = c(16, 4, 8), drop = FALSE) +
+  scale_size_manual(values = c(1.2, 2.8, 2.8), drop = FALSE) +
+  scale_colour_manual(values = dur_cols) +
+  scale_x_continuous(breaks = c(0, 50, 100), limits = c(-3, 103)) +
+  facet_wrap(~ panel, ncol = 4) +
+  labs(x = "familiarity rating (participant's own, 0-100)", y = "reproduced duration (s)",
+       shape = "trial", size = "trial", colour = "shown duration",
+       title = "All trials per participant: discarded trials (x / *) and discarded participants (red)",
+       subtitle = sprintf("lines = linear fit of kept trials on familiarity; dashed = veridical (0.8 / 1.6 s); slope in panel title = reproduced on shown duration\nrules: > %.0f s, > %g MAD per participant x duration, timing slope <= 0 / flat / > %.1f",
+                          MAX_REPRO_S, MAD_K, MAX_SLOPE)) +
+  theme_bw(base_size = 9) + theme(legend.position = "bottom", plot.subtitle = element_text(size = 7))
+ggsave(file.path(excl_fig_dir, "0_exclusions_trials_per_participant.png"), g_ex,
+       width = 10, height = 2.4 * ceiling(nrow(subj_slopes) / 4) + 1, dpi = 150)
+cnt <- rbind(data.frame(participant = per_subj$participant, status = "kept", n = per_subj$kept),
+             data.frame(participant = per_subj$participant, status = sprintf("> %g MAD", MAD_K), n = per_subj$mad),
+             data.frame(participant = per_subj$participant, status = sprintf("> %.0f s", MAX_REPRO_S),
+                        n = per_subj$over_max))
+cnt$status <- factor(cnt$status, levels = rev(levels(pd_ex$status)))
+cnt$participant_excluded <- cnt$participant %in% bad_subj
+g_cnt <- ggplot(cnt, aes(participant, n, fill = status)) +
+  geom_col(aes(alpha = participant_excluded)) +
+  scale_alpha_manual(values = c(`FALSE` = 1, `TRUE` = 0.35), labels = c("kept", "excluded"),
+                     name = "participant") +
+  scale_fill_manual(values = setNames(c("grey55", "#E6550D", "#B10026"),
+                                      c("kept", sprintf("> %g MAD", MAD_K), sprintf("> %.0f s", MAX_REPRO_S)))) +
+  geom_text(data = per_subj, inherit.aes = FALSE,
+            aes(participant, total + 3, label = ifelse(participant_excluded, "excl.", kept)), size = 2.8) +
+  labs(x = NULL, y = "trials", fill = "trial",
+       title = "Trials per participant after exclusions (number = kept trials)") +
+  theme_bw(base_size = 10)
+ggsave(file.path(excl_fig_dir, "0b_exclusions_trial_counts.png"), g_cnt, width = 9, height = 4, dpi = 150)
+
+# everything below uses the kept trials only
+full <- full[is.na(full$exclusion) & !full$subject_excluded, ]
+full$participant <- droplevels(factor(full$participant))
 full$participant <- factor(full$participant)
 full$appeal <- full$attractiveness_rating
 # accuracy and precision (as in the previous experiment)
@@ -608,5 +780,51 @@ g9b <- ggplot(gm9b, aes(face_group, mean, colour = face_group)) +
        title = "Variability of reproduction, three face groups",
        subtitle = "colour = mean +- SE across participants; grey = each participant")
 ggsave(file.path(fig_dir, "9b_variance_3groups.png"), g9b, width = 8.5, height = 4.5, dpi = 150)
+
+# 10. Reproduction error by familiarity-rating bins of 10
+bin_edges <- seq(0, 100, 10)
+bin_labels <- paste0(head(bin_edges, -1), "-", bin_edges[-1])
+full$fam_bin <- cut(full$familiarity, bin_edges, labels = bin_labels, include.lowest = TRUE)
+cell_mean <- ave(full$reproduction_error_s, interaction(full$participant, full$duration_factor, drop = TRUE))
+full$error_centered <- full$reproduction_error_s - cell_mean
+
+bin_summary <- function(col) {
+  s <- aggregate(full[[col]], by = list(duration_label = full$duration_label, fam_bin = full$fam_bin),
+                 FUN = function(v) c(mean = mean(v), se = if (length(v) > 1) sd(v) / sqrt(length(v)) else NA,
+                                     n = length(v)))
+  s <- do.call(data.frame, s)
+  names(s) <- sub("^x\\.", "", names(s))
+  s
+}
+plot_bins <- function(col, ylab, title, file) {
+  s <- bin_summary(col)
+  pm <- aggregate(full[[col]], by = list(participant = full$participant, duration_label = full$duration_label,
+                                         fam_bin = full$fam_bin), FUN = mean)
+  g <- ggplot(s, aes(fam_bin, mean, group = 1)) +
+    geom_hline(yintercept = 0, colour = "grey40") +
+    geom_line(data = pm, aes(y = x, group = participant), colour = "grey60", alpha = 0.35) +
+    geom_line(aes(colour = duration_label), linewidth = 1.1) +
+    geom_point(aes(colour = duration_label), size = 2.6) +
+    geom_errorbar(aes(ymin = mean - se, ymax = mean + se, colour = duration_label), width = 0.2) +
+    geom_text(aes(label = paste0("n=", n)), vjust = -1.4, size = 2.6, colour = "grey30") +
+    facet_wrap(~ duration_label) +
+    scale_colour_manual(values = unname(dur_cols), guide = "none") +
+    scale_x_discrete(drop = FALSE) +
+    labs(x = "familiarity rating", y = ylab, title = title,
+         subtitle = sprintf("all participants (N = %d), mean +- SE over trials; grey = each participant",
+                            nlevels(full$participant))) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  ggsave(file.path(fig_dir, file), g, width = 11, height = 4.6, dpi = 150)
+  s
+}
+b_raw <- plot_bins("reproduction_error_s", "reproduction error (s)\n(reproduced - shown)",
+                   "Reproduction error by familiarity", "10_error_by_familiarity_bins.png")
+b_cen <- plot_bins("error_centered", "reproduction error, centered\nwithin participant (s)",
+                   "Reproduction error by familiarity (participant mean removed)",
+                   "10_error_by_familiarity_bins_centered.png")
+bins_tab <- merge(b_raw, b_cen[, c("duration_label", "fam_bin", "mean")],
+                  by = c("duration_label", "fam_bin"), suffixes = c("_error_s", "_error_centered_s"))
+write.csv(bins_tab[order(bins_tab$duration_label, bins_tab$fam_bin), ],
+          file.path(out_dir, "error_by_familiarity_bins.csv"), row.names = FALSE)
 
 cat("Figures saved in", fig_dir, "\n")
