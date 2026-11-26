@@ -1287,19 +1287,27 @@ def run_ratings(win, face_images, participant_id, session):
             win, text, pos=(x, y), height=_LH, color=_LC, wrapWidth=100, align=align)
 
     prac_fam_lbl    = visual.TextStim(win, text="How familiar are you with this face?",
-                                      pos=(0, 170), height=24, color="white", wrapWidth=900,
+                                      pos=(0, 190), height=24, color="white", wrapWidth=900,
                                       alignText='center', anchorHoriz='center',
+                                      font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_fam_sub    = visual.TextStim(win, text="Have you seen this person before this experiment?",
+                                      pos=(0, 163), height=22, color="white", bold=True,
+                                      wrapWidth=900, alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_fam_sl     = _mk_slider(120)
     prac_fam_left   = _mk_label("Completely\nunfamiliar", -_SW/2-110, 120, "right")
     prac_fam_right  = _mk_label("Highly\nfamiliar",      _SW/2+110,  120, "left")
     prac_att_lbl    = visual.TextStim(win, text="How appealing do you find this face?",
-                                      pos=(0, 10), height=24, color="white", wrapWidth=900,
+                                      pos=(0, 25), height=24, color="white", wrapWidth=900,
                                       alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    prac_att_sl     = _mk_slider(-40)
-    prac_att_left   = _mk_label("Very\nunattractive", -_SW/2-110, -40, "right")
-    prac_att_right  = _mk_label("Very\nattractive",   _SW/2+110,  -40, "left")
+    prac_att_sub    = visual.TextStim(win, text="Do you find this person attractive?",
+                                      pos=(0, -2), height=22, color="white", bold=True,
+                                      wrapWidth=900, alignText='center', anchorHoriz='center',
+                                      font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    prac_att_sl     = _mk_slider(-50)
+    prac_att_left   = _mk_label("Very\nunattractive", -_SW/2-110, -50, "right")
+    prac_att_right  = _mk_label("Very\nattractive",   _SW/2+110,  -50, "left")
     prac_warn       = visual.TextStim(win, text="Please move both sliders before continuing.",
                                       pos=(0, -190), height=22, color=(1, 0.3, 0.3),
                                       alignText='center', anchorHoriz='center',
@@ -1320,9 +1328,9 @@ def run_ratings(win, face_images, participant_id, session):
         check_for_exit()
         for _s in instr_text_lines: _s.draw()
         practice_note.draw()
-        prac_fam_lbl.draw(); prac_fam_sl.draw()
+        prac_fam_lbl.draw(); prac_fam_sub.draw(); prac_fam_sl.draw()
         draw_lines(prac_fam_left, prac_fam_right)
-        prac_att_lbl.draw();
+        prac_att_lbl.draw(); prac_att_sub.draw()
         prac_att_sl.draw()
         draw_lines(prac_att_left, prac_att_right)
         fam_done = prac_fam_sl.getRating() is not None
@@ -1348,21 +1356,29 @@ def run_ratings(win, face_images, participant_id, session):
     face_width_pix, face_height_pix = calculate_face_size()
     face_stim  = visual.ImageStim(win, image=faces_to_rate[0], pos=(0, 250))
     fam_label  = visual.TextStim(win, text="How familiar are you with this face?",
-                                 pos=(0, 120), height=26, color="white", wrapWidth=900,
+                                 pos=(0, 140), height=26, color="white", wrapWidth=900,
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    fam_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, 70),
+    fam_sub    = visual.TextStim(win, text="Have you seen this person before this experiment?",
+                                 pos=(0, 112), height=22, color="white", bold=True, wrapWidth=900,
+                                 alignText='center', anchorHoriz='center',
+                                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    fam_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, 65),
                         size=(SW, SH), style=["slider"], granularity=1,
                         color="white", fillColor=(0.4, 0.6, 1), borderColor="white",
                         markerColor=(0.4, 0.6, 1), labelColor="white")
     shrink_slider_marker(fam_slider)
     fam_left = draw_centered_multiline_text(
-        win, "Completely\nunfamiliar", pos=(-SW / 2 - 110, 70), height=LH,
+        win, "Completely\nunfamiliar", pos=(-SW / 2 - 110, 65), height=LH,
         color=LC, wrapWidth=100, align="right")
     fam_right = draw_centered_multiline_text(
-        win, "Highly\nfamiliar", pos=(SW / 2 + 110, 70), height=LH,
+        win, "Highly\nfamiliar", pos=(SW / 2 + 110, 65), height=LH,
         color=LC, wrapWidth=100, align="left")
     att_label  = visual.TextStim(win, text="How appealing do you find this face?",
-                                 pos=(0, -60), height=26, color="white", wrapWidth=900,
+                                 pos=(0, -30), height=26, color="white", wrapWidth=900,
+                                 alignText='center', anchorHoriz='center',
+                                 font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
+    att_sub    = visual.TextStim(win, text="Do you find this person attractive?",
+                                 pos=(0, -58), height=22, color="white", bold=True, wrapWidth=900,
                                  alignText='center', anchorHoriz='center',
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     att_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, -110),
@@ -1407,10 +1423,10 @@ def run_ratings(win, face_images, participant_id, session):
         while True:
             check_for_exit()
             face_stim.draw()
-            fam_label.draw();
+            fam_label.draw(); fam_sub.draw()
             fam_slider.draw();
             draw_lines(fam_left, fam_right)
-            att_label.draw();
+            att_label.draw(); att_sub.draw()
             att_slider.draw();
             draw_lines(att_left, att_right)
             fam_rated = fam_slider.getRating() is not None
