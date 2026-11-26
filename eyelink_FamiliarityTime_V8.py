@@ -1290,8 +1290,8 @@ def run_ratings(win, face_images, participant_id, session):
                                       pos=(0, 190), height=24, color="white", wrapWidth=900,
                                       alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    prac_fam_sub    = visual.TextStim(win, text="Have you seen this person before this experiment?",
-                                      pos=(0, 163), height=22, color="white", bold=True,
+    prac_fam_sub    = visual.TextStim(win, text="(Have you seen this person before this experiment?)",
+                                      pos=(0, 163), height=18, color="white", bold=True,
                                       wrapWidth=900, alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_fam_sl     = _mk_slider(120)
@@ -1301,8 +1301,8 @@ def run_ratings(win, face_images, participant_id, session):
                                       pos=(0, 25), height=24, color="white", wrapWidth=900,
                                       alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    prac_att_sub    = visual.TextStim(win, text="Do you find this person attractive?",
-                                      pos=(0, -2), height=22, color="white", bold=True,
+    prac_att_sub    = visual.TextStim(win, text="(Do you find this person attractive?)",
+                                      pos=(0, -2), height=18, color="white", bold=True,
                                       wrapWidth=900, alignText='center', anchorHoriz='center',
                                       font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     prac_att_sl     = _mk_slider(-50)
@@ -1358,8 +1358,8 @@ def run_ratings(win, face_images, participant_id, session):
     fam_label  = visual.TextStim(win, text="How familiar are you with this face?",
                                  pos=(0, 140), height=26, color="white", wrapWidth=900,
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    fam_sub    = visual.TextStim(win, text="Have you seen this person before this experiment?",
-                                 pos=(0, 112), height=22, color="white", bold=True, wrapWidth=900,
+    fam_sub    = visual.TextStim(win, text="(Have you seen this person before this experiment?)",
+                                 pos=(0, 112), height=18, color="white", bold=True, wrapWidth=900,
                                  alignText='center', anchorHoriz='center',
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     fam_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, 65),
@@ -1377,8 +1377,8 @@ def run_ratings(win, face_images, participant_id, session):
                                  pos=(0, -30), height=26, color="white", wrapWidth=900,
                                  alignText='center', anchorHoriz='center',
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
-    att_sub    = visual.TextStim(win, text="Do you find this person attractive?",
-                                 pos=(0, -58), height=22, color="white", bold=True, wrapWidth=900,
+    att_sub    = visual.TextStim(win, text="(Do you find this person attractive?)",
+                                 pos=(0, -58), height=18, color="white", bold=True, wrapWidth=900,
                                  alignText='center', anchorHoriz='center',
                                  font=TUTORIAL_FONT_NAME, fontFiles=TUTORIAL_FONT_FILES)
     att_slider = Slider(win, ticks=(0, 100), labels=None, pos=(0, -110),
